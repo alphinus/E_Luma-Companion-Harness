@@ -80,44 +80,78 @@ const App: React.FC = () => {
   const tokenClientRef = useRef<any>(null);
 
   useEffect(() => {
-    // Initialize Google Identity Services
+    // Initialize Google Identity Services with proper error handling
     const initGsi = () => {
-      // @ts-ignore
-      if (window.google) {
+      try {
         // @ts-ignore
-        tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: SCOPES,
-          callback: async (response: any) => {
-            if (response.error !== undefined) throw response;
+        if (window.google && window.google.accounts) {
+          // @ts-ignore
+          tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: SCOPES,
+            callback: async (response: any) => {
+              try {
+                if (response.error !== undefined) {
+                  console.error("OAuth Error:", response);
+                  setError("Login fehlgeschlagen: " + response.error);
+                  return;
+                }
 
-            // Fetch user info
-            const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-              headers: { Authorization: `Bearer ${response.access_token}` }
-            });
-            const info = await userInfoRes.json();
+                // Fetch user info
+                const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: { Authorization: `Bearer ${response.access_token}` }
+                });
+                const info = await userInfoRes.json();
 
-            setUser({
-              email: info.email,
-              name: info.name,
-              picture: info.picture,
-              accessToken: response.access_token,
-              baseInstruction: 'Du bist ein strukturierter Projektmanager.', // Default
-              preferredProvider: 'google'
-            });
-          },
-        });
+                setUser({
+                  email: info.email,
+                  name: info.name,
+                  picture: info.picture,
+                  accessToken: response.access_token,
+                  baseInstruction: 'Du bist ein strukturierter Projektmanager.',
+                  preferredProvider: 'google'
+                });
+              } catch (err) {
+                console.error("User info fetch error:", err);
+                setError("Benutzerdaten konnten nicht geladen werden.");
+              }
+            },
+          });
+        } else {
+          console.log("Google Identity Services not yet loaded, will retry...");
+        }
+      } catch (err) {
+        console.error("GSI Init Error:", err);
       }
     };
-    initGsi();
 
+    // Retry GSI init a few times in case script loads late
+    initGsi();
+    const retryTimer = setTimeout(initGsi, 1000);
+    const retryTimer2 = setTimeout(initGsi, 2500);
+
+    // Check for AI Studio key (only in that environment)
     const checkKey = async () => {
-      // @ts-ignore
-      if (window.aistudio) setHasApiKey(await window.aistudio.hasSelectedApiKey());
+      try {
+        // @ts-ignore
+        if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+          // @ts-ignore
+          setHasApiKey(await window.aistudio.hasSelectedApiKey());
+        } else {
+          // Not in AI Studio environment - that's fine, we use backend proxy
+          setHasApiKey(true);
+        }
+      } catch (err) {
+        console.log("Not in AI Studio environment");
+        setHasApiKey(true);
+      }
     };
     checkKey();
-    const inv = setInterval(checkKey, 2000);
-    return () => clearInterval(inv);
+
+    return () => {
+      clearTimeout(retryTimer);
+      clearTimeout(retryTimer2);
+    };
   }, []);
 
   const handleAuthClick = () => {
