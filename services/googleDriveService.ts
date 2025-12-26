@@ -82,7 +82,8 @@ export const saveToGoogleDrive = async (
     "problem_statement", "target_user", "solution_summary", "constraints", 
     "differentiation", "risks", "next_action", "status", "priority", 
     "tags", "source", "version", 
-    "image_url_1", "image_url_2", "image_url_3", "image_url_4", "image_url_5"
+    "image_url_1", "image_url_2", "image_url_3", "image_url_4", "image_url_5",
+    "audio_transcript"
   ];
   
   const values = headers.map(h => {
@@ -134,7 +135,6 @@ export const listIdeationFiles = async (accessToken: string): Promise<any[]> => 
     return data.files || [];
   } catch (error: any) {
     console.error("List Files Error:", error);
-    // Hier werfen wir den Fehler weiter, damit die UI darauf reagieren kann
     throw error;
   }
 };

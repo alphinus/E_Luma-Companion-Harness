@@ -1,13 +1,51 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { IdeationData, NormalizedIdea, VoiceExtraction } from "../types";
 
-/**
- * Erstellt eine frische Instanz von GoogleGenAI mit dem aktuellsten Key.
- * Wichtig: Muss direkt vor dem Call aufgerufen werden, um Race Conditions 
- * bei der Key-Auswahl zu vermeiden.
- */
+import { GoogleGenAI, Type } from "@google/genai";
+import { IdeationData, NormalizedIdea, VoiceExtraction, PersonData } from "../types";
+
 const getAIClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
+
+export const generateIdeaFromPerson = async (
+  person: PersonData,
+  systemInstruction: string
+): Promise<Partial<IdeationData>> => {
+  const ai = getAIClient();
+  const prompt = `
+    Basierend auf diesem Personenprofil, generiere eine innovative App-Idee, die genau auf diese Person zugeschnitten ist.
+    
+    Name/Rolle: ${person.name}
+    Expertise: ${person.expertise}
+    Leidenschaften: ${person.passions}
+    Herausforderungen: ${person.challenges}
+    Lebensstil: ${person.lifestyle}
+    Zusatzinfos: ${person.manualExtension}
+    
+    Erstelle ein Konzept, das ein echtes Problem löst oder ein Potenzial dieser Person digital skaliert.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: prompt,
+    config: {
+      systemInstruction: systemInstruction + "\nAntworte auf Deutsch im JSON Format.",
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          projectName: { type: Type.STRING },
+          problemStatement: { type: Type.STRING },
+          targetUser: { type: Type.STRING },
+          solutionSummary: { type: Type.STRING },
+          differentiation: { type: Type.STRING },
+          tags: { type: Type.STRING }
+        },
+        required: ["projectName", "problemStatement", "targetUser", "solutionSummary", "differentiation", "tags"]
+      }
+    }
+  });
+
+  return JSON.parse(response.text || '{}');
 };
 
 export const normalizeIdeation = async (
@@ -16,27 +54,13 @@ export const normalizeIdeation = async (
   systemInstruction: string
 ): Promise<NormalizedIdea> => {
   const ai = getAIClient();
-
-  const prompt = `
-    Normalisiere die folgenden Ideations-Eingaben in ein standardisiertes, maschinenlesbares Format auf DEUTSCH.
-    
-    Eingaben:
-    Projektname: ${raw.projectName}
-    Problem: ${raw.problemStatement}
-    Zielgruppe: ${raw.targetUser}
-    Lösung: ${raw.solutionSummary}
-    Einschränkungen: ${raw.constraints}
-    Differenzierung: ${raw.differentiation}
-    Risiken: ${raw.risks}
-    Nächster Schritt: ${raw.nextAction}
-    Tags: ${raw.tags}
-  `;
+  const prompt = `Normalisiere diese Daten auf DEUTSCH: ${JSON.stringify(raw)}`;
 
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
-      systemInstruction: systemInstruction + "\nAntworte immer auf Deutsch. Erzeuge eine strukturierte JSON-Ausgabe.",
+      systemInstruction: systemInstruction + "\nAntworte immer auf Deutsch im JSON-Format.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -49,16 +73,14 @@ export const normalizeIdeation = async (
           differentiation: { type: Type.STRING },
           risks: { type: Type.STRING },
           next_action: { type: Type.STRING },
-          tags: { type: Type.STRING, description: "Mit Pipe getrennte Tags wie tag1|tag2" },
-          priority: { type: Type.STRING, description: "Eines von P0, P1, P2, P3" }
-        },
-        required: ["project_name", "problem_statement", "target_user", "solution_summary", "constraints", "differentiation", "risks", "next_action", "tags", "priority"]
+          tags: { type: Type.STRING },
+          priority: { type: Type.STRING }
+        }
       }
     }
   });
 
   const normalized = JSON.parse(response.text || '{}');
-
   return {
     idea_id: crypto.randomUUID(),
     created_at: new Date().toISOString(),
@@ -73,14 +95,11 @@ export const normalizeIdeation = async (
     next_action: normalized.next_action || raw.nextAction,
     status: "neu",
     priority: normalized.priority || "P2",
-    tags: normalized.tags || raw.tags.split(',').map(t => t.trim()).join('|'),
+    tags: normalized.tags || raw.tags,
     source: "ideation_app",
     version: "v1.4",
-    image_url_1: "",
-    image_url_2: "",
-    image_url_3: "",
-    image_url_4: "",
-    image_url_5: ""
+    image_url_1: "", image_url_2: "", image_url_3: "", image_url_4: "", image_url_5: "",
+    audio_transcript: raw.audioTranscript || ""
   };
 };
 
@@ -90,53 +109,43 @@ export const processAudioIdeation = async (
   userInstruction: string
 ): Promise<VoiceExtraction> => {
   const ai = getAIClient();
-
-  // Fixing contents to use a Content object with parts array as recommended for multi-modal calls.
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: {
       parts: [
-        {
-          inlineData: {
-            data: audioBase64,
-            mimeType: mimeType
-          }
-        },
-        {
-          text: "Höre dir diese Sprachnotiz an. Extrahiere so viele Ideationsdaten wie möglich in das angegebene JSON-Format auf DEUTSCH. Falls wichtige Informationen (Projektname, Problem oder Lösung) fehlen, stelle MAXIMAL zwei präzise Rückfragen."
-        }
+        { inlineData: { data: audioBase64, mimeType } },
+        { text: "Analysiere das Audio. Transkribiere das Audio wortwörtlich (Feld: transcript) und extrahiere dann strukturiert Ideendaten ODER Personendaten." }
       ]
     },
     config: {
-      systemInstruction: userInstruction + "\nDu bist ein Experte im Zuhören. Extrahiere Ideendaten aus Audio. Antworte NUR im JSON-Format auf Deutsch.",
+      systemInstruction: userInstruction + "\nAntworte im JSON Format.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
+          transcript: { type: Type.STRING, description: "Die wortwörtliche Transkription des Audios." },
           extracted_data: {
             type: Type.OBJECT,
             properties: {
               projectName: { type: Type.STRING },
               problemStatement: { type: Type.STRING },
-              targetUser: { type: Type.STRING },
-              solutionSummary: { type: Type.STRING },
-              constraints: { type: Type.STRING },
-              differentiation: { type: Type.STRING },
-              risks: { type: Type.STRING },
-              nextAction: { type: Type.STRING },
-              tags: { type: Type.STRING }
+              solutionSummary: { type: Type.STRING }
             }
           },
-          questions: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
+          extracted_person: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              expertise: { type: Type.STRING },
+              passions: { type: Type.STRING },
+              challenges: { type: Type.STRING }
+            }
           },
-          confidence_score: { type: Type.NUMBER }
+          questions: { type: Type.ARRAY, items: { type: Type.STRING } }
         },
-        required: ["extracted_data", "questions"]
+        required: ["transcript"]
       }
     }
   });
-
-  return JSON.parse(response.text || '{}') as VoiceExtraction;
+  return JSON.parse(response.text || '{}');
 };

@@ -27,10 +27,22 @@ export interface IdeationData {
   nextAction: string;
   tags: string;
   images: string[];
+  audioTranscript?: string; // New field for traceability
+}
+
+export interface PersonData {
+  name: string;
+  expertise: string;
+  passions: string;
+  challenges: string;
+  lifestyle: string;
+  manualExtension: string;
 }
 
 export interface VoiceExtraction {
   extracted_data: Partial<IdeationData>;
+  extracted_person?: Partial<PersonData>;
+  transcript: string; // New field for the literal transcript
   questions: string[];
   confidence_score: number;
 }
@@ -57,6 +69,7 @@ export interface NormalizedIdea {
   image_url_3: string;
   image_url_4: string;
   image_url_5: string;
+  audio_transcript: string; // New field for the CSV export
 }
 
 export enum WizardStep {
@@ -76,5 +89,8 @@ export enum WizardStep {
   VOICE_RECORDING = 13,
   VOICE_CLARIFICATION = 14,
   PREVIEW_ALL = 15,
-  SETTINGS = 16
+  SETTINGS = 16,
+  PERSON_PROFILE = 17,
+  PERSON_CHALLENGES = 18,
+  PERSON_SYNTHESIS = 19
 }
