@@ -5,6 +5,7 @@ export interface UserProfile {
   picture: string;
   accessToken?: string;
   baseInstruction: string;
+  preferredProvider: 'google' | 'openai';
 }
 
 export interface PromptPreset {
@@ -74,5 +75,6 @@ export enum WizardStep {
   SUCCESS = 12,
   VOICE_RECORDING = 13,
   VOICE_CLARIFICATION = 14,
-  PREVIEW_ALL = 15
+  PREVIEW_ALL = 15,
+  SETTINGS = 16
 }

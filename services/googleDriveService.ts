@@ -1,6 +1,34 @@
 
 import { NormalizedIdea } from "../types";
 
+/**
+ * Hilfsfunktion zur Behandlung von Google API-Antworten und Fehlern.
+ */
+const handleResponse = async (response: Response) => {
+  if (response.ok) return response;
+
+  let errorMessage = 'Ein unbekannter Fehler ist aufgetreten.';
+  try {
+    const errorData = await response.json();
+    errorMessage = errorData.error?.message || response.statusText;
+  } catch (e) {
+    errorMessage = response.statusText || 'Netzwerkfehler';
+  }
+
+  switch (response.status) {
+    case 401:
+      throw new Error('Sitzung abgelaufen. Bitte melde dich erneut an (Logout/Login), um den Zugriff zu erneuern.');
+    case 403:
+      throw new Error('Zugriff verweigert. Bitte stelle sicher, dass die App die nötigen Berechtigungen für deinen Google Drive hat.');
+    case 429:
+      throw new Error('Zu viele Anfragen an Google Drive (Rate Limit). Bitte warte kurz und versuche es gleich noch einmal.');
+    case 404:
+      throw new Error('Die angeforderte Datei wurde nicht gefunden.');
+    default:
+      throw new Error(`Google Drive Fehler (${response.status}): ${errorMessage}`);
+  }
+};
+
 export const uploadImageToDrive = async (
   base64Data: string,
   fileName: string,
@@ -13,6 +41,8 @@ export const uploadImageToDrive = async (
     };
 
     const base64Content = base64Data.split(',')[1];
+    if (!base64Content) throw new Error('Ungültige Bilddaten: Base64-Inhalt fehlt.');
+
     const byteCharacters = atob(base64Content);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
@@ -34,13 +64,12 @@ export const uploadImageToDrive = async (
       }
     );
 
-    if (!response.ok) throw new Error('Image upload failed');
+    await handleResponse(response);
     const data = await response.json();
-    
     return data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Drive Image Upload Error:", error);
-    return "upload_failed";
+    throw error;
   }
 };
 
@@ -84,7 +113,7 @@ export const saveToGoogleDrive = async (
       }
     );
 
-    if (!response.ok) throw new Error('Failed to upload CSV to Google Drive');
+    await handleResponse(response);
     return await response.json();
   } catch (error) {
     console.error("Drive CSV Error:", error);
@@ -100,12 +129,13 @@ export const listIdeationFiles = async (accessToken: string): Promise<any[]> => 
         headers: { 'Authorization': `Bearer ${accessToken}` }
       }
     );
-    if (!response.ok) throw new Error('Failed to list files');
+    await handleResponse(response);
     const data = await response.json();
     return data.files || [];
-  } catch (error) {
+  } catch (error: any) {
     console.error("List Files Error:", error);
-    return [];
+    // Hier werfen wir den Fehler weiter, damit die UI darauf reagieren kann
+    throw error;
   }
 };
 
@@ -117,11 +147,11 @@ export const getFileContent = async (fileId: string, accessToken: string): Promi
         headers: { 'Authorization': `Bearer ${accessToken}` }
       }
     );
-    if (!response.ok) throw new Error('Failed to fetch file content');
+    await handleResponse(response);
     return await response.text();
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get File Content Error:", error);
-    return "";
+    throw error;
   }
 };
 

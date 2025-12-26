@@ -1,13 +1,21 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { IdeationData, NormalizedIdea, VoiceExtraction } from "../types";
+
+/**
+ * Erstellt eine frische Instanz von GoogleGenAI mit dem aktuellsten Key.
+ * Wichtig: Muss direkt vor dem Call aufgerufen werden, um Race Conditions 
+ * bei der Key-Auswahl zu vermeiden.
+ */
+const getAIClient = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 export const normalizeIdeation = async (
   raw: IdeationData, 
   userEmail: string,
   systemInstruction: string
 ): Promise<NormalizedIdea> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAIClient();
 
   const prompt = `
     Normalisiere die folgenden Ideations-Eingaben in ein standardisiertes, maschinenlesbares Format auf DEUTSCH.
@@ -67,7 +75,7 @@ export const normalizeIdeation = async (
     priority: normalized.priority || "P2",
     tags: normalized.tags || raw.tags.split(',').map(t => t.trim()).join('|'),
     source: "ideation_app",
-    version: "v1.3",
+    version: "v1.4",
     image_url_1: "",
     image_url_2: "",
     image_url_3: "",
@@ -81,21 +89,24 @@ export const processAudioIdeation = async (
   mimeType: string,
   userInstruction: string
 ): Promise<VoiceExtraction> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAIClient();
 
+  // Fixing contents to use a Content object with parts array as recommended for multi-modal calls.
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: [
-      {
-        inlineData: {
-          data: audioBase64,
-          mimeType: mimeType
+    contents: {
+      parts: [
+        {
+          inlineData: {
+            data: audioBase64,
+            mimeType: mimeType
+          }
+        },
+        {
+          text: "Höre dir diese Sprachnotiz an. Extrahiere so viele Ideationsdaten wie möglich in das angegebene JSON-Format auf DEUTSCH. Falls wichtige Informationen (Projektname, Problem oder Lösung) fehlen, stelle MAXIMAL zwei präzise Rückfragen."
         }
-      },
-      {
-        text: "Höre dir diese Sprachnotiz an. Extrahiere so viele Ideationsdaten wie möglich in das angegebene JSON-Format auf DEUTSCH. Falls wichtige Informationen (Projektname, Problem oder Lösung) fehlen, stelle MAXIMAL zwei präzise Rückfragen. Sei ein hilfreicher kreativer Assistent."
-      }
-    ],
+      ]
+    },
     config: {
       systemInstruction: userInstruction + "\nDu bist ein Experte im Zuhören. Extrahiere Ideendaten aus Audio. Antworte NUR im JSON-Format auf Deutsch.",
       responseMimeType: "application/json",
@@ -118,8 +129,7 @@ export const processAudioIdeation = async (
           },
           questions: {
             type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Max. 2 Fragen, falls kritische Infos fehlen."
+            items: { type: Type.STRING }
           },
           confidence_score: { type: Type.NUMBER }
         },
