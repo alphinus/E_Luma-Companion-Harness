@@ -14,21 +14,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         switch (action) {
             case 'normalize':
                 try {
+                    // Fail-fast: If no Gemini key, mock an error to trigger fallback immediately
+                    if (!process.env.GEMINI_API_KEY) throw new Error("No Gemini API Key found");
+
                     // Try Gemini first
                     const result = await geminiNormalize(data, userEmail, instruction);
                     return res.status(200).json({ ...result, _provider: 'gemini' });
                 } catch (err) {
-                    console.warn("Gemini Normalize failed, falling back to OpenAI", err);
+                    console.warn("Gemini Normalize failed/skipped, falling back to OpenAI", err);
                     const result = await openaiNormalize(data, userEmail, instruction);
                     return res.status(200).json({ ...result, _provider: 'openai' });
                 }
 
             case 'generateIdea':
                 try {
+                    if (!process.env.GEMINI_API_KEY) throw new Error("No Gemini API Key found");
                     const result = await geminiGenerate(personData, instruction);
                     return res.status(200).json({ ...result, _provider: 'gemini' });
                 } catch (err) {
-                    console.warn("Gemini Generate failed, falling back to OpenAI", err);
+                    console.warn("Gemini Generate failed/skipped, falling back to OpenAI", err);
                     const result = await openaiGenerate(personData, instruction);
                     return res.status(200).json({ ...result, _provider: 'openai' });
                 }

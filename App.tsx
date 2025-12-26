@@ -46,6 +46,8 @@ const App: React.FC = () => {
   const [normalizedResult, setNormalizedResult] = useState<NormalizedIdea | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
   const [lastProvider, setLastProvider] = useState<ProviderType | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ gemini: boolean; openai: boolean } | null>(null);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
 
   const [selectedPreset, setSelectedPreset] = useState<string>('normal');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -79,6 +81,22 @@ const App: React.FC = () => {
 
 
   const tokenClientRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (step === WizardStep.PROCESSING) {
+      setDebugLog(["🚀 Prozess gestartet..."]);
+      const t1 = setTimeout(() => setDebugLog(p => [...p, "📡 Verbinde mit Vercel Serverless Function..."]), 1000);
+      const t2 = setTimeout(() => setDebugLog(p => [...p, "⏳ Sende Daten an Backend-Proxy..."]), 2500);
+      const t3 = setTimeout(() => setDebugLog(p => [...p, "🤖 KI-Modell (Gemini/Gateway) wird angefragt..."]), 5000);
+      const t4 = setTimeout(() => setDebugLog(p => [...p, "⚠️ Dauert länger als üblich - Fallback aktiv?"]), 10000);
+      const t5 = setTimeout(() => setDebugLog(p => [...p, "🐢 Server arbeitet noch (Kaltstart?)..."]), 20000);
+      const t6 = setTimeout(() => setDebugLog(p => [...p, "❌ Timeout möglich - Bitte Seite neu laden falls nichts passiert."]), 45000);
+
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); clearTimeout(t6); };
+    } else {
+      setDebugLog([]);
+    }
+  }, [step]);
 
   useEffect(() => {
     // Initialize Google Identity Services with proper error handling
@@ -131,8 +149,21 @@ const App: React.FC = () => {
     const retryTimer = setTimeout(initGsi, 1000);
     const retryTimer2 = setTimeout(initGsi, 2500);
 
+    // Check server status (Vercel)
+    const checkServerStatus = async () => {
+      try {
+        const res = await fetch('/api/status');
+        const status = await res.json();
+        setServerStatus(status);
+        console.log("Server Status:", status);
+      } catch (err) {
+        console.warn("Could not check server status", err);
+      }
+    };
+
     // Check for AI Studio key (only in that environment)
     const checkKey = async () => {
+      checkServerStatus(); // Check server keys too
       try {
         // @ts-ignore
         if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
@@ -432,7 +463,11 @@ const App: React.FC = () => {
               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24"><path d="M12 4V2m0 20v-2m8-8h2M2 12h2" stroke="currentColor" strokeWidth="3" /></svg>
             </div>
             <h2 className="text-2xl font-black text-slate-900 mb-2">KI-Processing...</h2>
-            <p className="text-indigo-600 font-bold uppercase tracking-widest text-[10px]">{processingStatus.step}</p>
+            <p className="text-indigo-600 font-bold uppercase tracking-widest text-[10px] mb-6">{processingStatus.step}</p>
+            <div className="bg-slate-900 text-green-400 font-mono text-[10px] p-4 rounded-xl text-left h-32 overflow-y-auto border-t-2 border-indigo-500 shadow-inner">
+              {debugLog.map((l, i) => <div key={i}>{l}</div>)}
+              <div className="animate-pulse">_</div>
+            </div>
           </div>
         );
 
@@ -536,24 +571,31 @@ const App: React.FC = () => {
         </div>
         <div className="flex items-center gap-4">
           {lastProvider && (
-            <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
-              lastProvider === 'gemini' 
-                ? 'bg-blue-50 text-blue-700 border border-blue-100' 
-                : lastProvider === 'openai' 
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                  : 'bg-slate-50 text-slate-500 border border-slate-100'
-            }`}>
+            <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${lastProvider === 'gemini'
+              ? 'bg-blue-50 text-blue-700 border border-blue-100'
+              : lastProvider === 'openai'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                : 'bg-slate-50 text-slate-500 border border-slate-100'
+              }`}>
               {lastProvider === 'gemini' && '✨'}
               {lastProvider === 'openai' && '🤖'}
               {lastProvider === 'gemini' ? 'Gemini' : lastProvider === 'openai' ? 'OpenAI' : 'N/A'}
             </div>
           )}
-          <button
-            onClick={handleKeySetup}
-            className={`px-4 py-2 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all ${hasApiKey ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100 animate-pulse'}`}
-          >
-            {hasApiKey ? 'API: Ready' : 'Key Setzen'}
-          </button>
+          <div className="flex gap-2">
+            {serverStatus ? (
+              <>
+                <div className={`px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.gemini ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                  <span>✨</span> {serverStatus.gemini ? 'Gemini Ready' : 'No Gemini'}
+                </div>
+                <div className={`px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.openai ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                  <span>🤖</span> {serverStatus.openai ? 'OpenAI Ready' : 'No OpenAI'}
+                </div>
+              </>
+            ) : (
+              <div className="animate-pulse bg-slate-100 w-24 h-8 rounded-xl"></div>
+            )}
+          </div>
           <div className="h-8 w-[1px] bg-slate-100 mx-2"></div>
           <img src={user.picture} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
           <button onClick={() => setUser(null)} className="text-slate-300 hover:text-red-500 transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg></button>
