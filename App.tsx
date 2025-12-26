@@ -5,7 +5,7 @@ import { llmService } from './services/llmService';
 import { saveToGoogleDrive, uploadImageToDrive, downloadCsvLocally, listIdeationFiles, getFileContent } from './services/googleDriveService';
 
 
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"; // User will need to replace this or use env
+const GOOGLE_CLIENT_ID = "1089918924198-0nnc8nuradga903ifa0vbn3c2usuan4p.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
 
 const ARCHITECT_BLOCKS = {
