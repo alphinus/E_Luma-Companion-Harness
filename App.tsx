@@ -490,7 +490,7 @@ const App: React.FC = () => {
         <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Ideation Companion</h1>
         <p className="text-slate-400 mb-12 font-medium">Production Cloud Access</p>
 
-        <div className="flex flex-col items-center gap-8">
+        <div className="flex flex-col items-center gap-6">
           <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center text-5xl shadow-inner">👤</div>
 
           <button
@@ -501,7 +501,26 @@ const App: React.FC = () => {
             <span className="font-black text-xl text-slate-900">Login mit Google</span>
           </button>
 
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Sicherer Zugriff auf dein Drive</p>
+          <div className="flex items-center gap-4 w-full max-w-xs">
+            <div className="flex-1 h-px bg-slate-200"></div>
+            <span className="text-xs text-slate-400 font-medium">oder</span>
+            <div className="flex-1 h-px bg-slate-200"></div>
+          </div>
+
+          <button
+            onClick={() => setUser({
+              email: 'guest@eluma.app',
+              name: 'Gast',
+              picture: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest',
+              baseInstruction: 'Du bist ein kreativer Ideengeber.',
+              preferredProvider: 'google'
+            })}
+            className="px-8 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all active:scale-95"
+          >
+            🚀 Ohne Login fortfahren
+          </button>
+
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-4">Drive-Sync benötigt Google Login</p>
         </div>
       </div>
     </div>
