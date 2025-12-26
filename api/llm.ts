@@ -16,31 +16,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 try {
                     // Try Gemini first
                     const result = await geminiNormalize(data, userEmail, instruction);
-                    return res.status(200).json(result);
+                    return res.status(200).json({ ...result, _provider: 'gemini' });
                 } catch (err) {
                     console.warn("Gemini Normalize failed, falling back to OpenAI", err);
                     const result = await openaiNormalize(data, userEmail, instruction);
-                    return res.status(200).json(result);
+                    return res.status(200).json({ ...result, _provider: 'openai' });
                 }
 
             case 'generateIdea':
                 try {
                     const result = await geminiGenerate(personData, instruction);
-                    return res.status(200).json(result);
+                    return res.status(200).json({ ...result, _provider: 'gemini' });
                 } catch (err) {
                     console.warn("Gemini Generate failed, falling back to OpenAI", err);
                     const result = await openaiGenerate(personData, instruction);
-                    return res.status(200).json(result);
+                    return res.status(200).json({ ...result, _provider: 'openai' });
                 }
 
             case 'processAudio':
                 try {
                     // Audio is more complex, we primarily use Gemini for its native multimodal support
                     const result = await geminiAudio(audioBase64, mimeType, instruction);
-                    return res.status(200).json(result);
+                    return res.status(200).json({ ...result, _provider: 'gemini' });
                 } catch (err) {
                     console.error("Audio Processing failed (No OpenAI fallback for audio yet)", err);
-                    return res.status(500).json({ error: 'Audio processing failed' });
+                    return res.status(500).json({ error: 'Audio processing failed', _provider: 'none' });
                 }
 
             default:

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { UserProfile, IdeationData, WizardStep, NormalizedIdea, PromptPreset, VoiceExtraction, PersonData } from './types';
-import { llmService } from './services/llmService';
+import { llmService, ProviderType } from './services/llmService';
 import { saveToGoogleDrive, uploadImageToDrive, downloadCsvLocally, listIdeationFiles, getFileContent } from './services/googleDriveService';
 
 
@@ -45,6 +45,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [normalizedResult, setNormalizedResult] = useState<NormalizedIdea | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [lastProvider, setLastProvider] = useState<ProviderType | null>(null);
 
   const [selectedPreset, setSelectedPreset] = useState<string>('normal');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -225,21 +226,19 @@ const App: React.FC = () => {
       reader.readAsDataURL(blob);
       reader.onloadend = async () => {
         const base64 = (reader.result as string).split(',')[1];
-        const res = await llmService.processAudio(base64, blob.type, user, systemInstruction);
+        const { data: res, provider } = await llmService.processAudio(base64, blob.type, user, systemInstruction);
+        setLastProvider(provider);
 
         // Store the transcript for traceability
         const transcript = res.transcript || "";
 
         if (isPersonMode && res.extracted_person) {
           setPersonData(p => ({ ...p, ...res.extracted_person }));
-          // Note: for person mode we could also store transcript if needed, 
-          // but usually it leads to idea synthesis.
           setStep(WizardStep.PERSON_PROFILE);
         } else if (!isPersonMode && res.extracted_data) {
           setFormData(f => ({ ...f, ...res.extracted_data, audioTranscript: transcript }));
           setStep(WizardStep.REVIEW);
         } else if (transcript) {
-          // If only transcript was found
           setFormData(f => ({ ...f, audioTranscript: transcript }));
           setStep(WizardStep.REVIEW);
         }
@@ -257,7 +256,8 @@ const App: React.FC = () => {
     setStep(WizardStep.PROCESSING);
     setProcessingStatus({ step: 'Idee wird synthetisiert...', progress: 40 });
     try {
-      const idea = await llmService.generateFromPerson(personData, systemInstruction);
+      const { data: idea, provider } = await llmService.generateFromPerson(personData, systemInstruction);
+      setLastProvider(provider);
       setFormData(f => ({ ...f, ...idea }));
       setStep(WizardStep.PERSON_SYNTHESIS);
     } catch (err) { setError("Generierung fehlgeschlagen."); setStep(WizardStep.PERSON_CHALLENGES); }
@@ -442,7 +442,8 @@ const App: React.FC = () => {
             setStep(WizardStep.PROCESSING);
             setProcessingStatus({ step: 'Finalisierung & Cloud-Sync...', progress: 80 });
             try {
-              const res = await llmService.normalize(formData, user!, systemInstruction);
+              const { data: res, provider } = await llmService.normalize(formData, user!, systemInstruction);
+              setLastProvider(provider);
               setNormalizedResult(res);
               // Real Drive Sync
               if (user?.accessToken) {
@@ -534,6 +535,19 @@ const App: React.FC = () => {
           <span className="text-xl font-black text-slate-900 uppercase tracking-tight">Companion</span>
         </div>
         <div className="flex items-center gap-4">
+          {lastProvider && (
+            <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+              lastProvider === 'gemini' 
+                ? 'bg-blue-50 text-blue-700 border border-blue-100' 
+                : lastProvider === 'openai' 
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                  : 'bg-slate-50 text-slate-500 border border-slate-100'
+            }`}>
+              {lastProvider === 'gemini' && '✨'}
+              {lastProvider === 'openai' && '🤖'}
+              {lastProvider === 'gemini' ? 'Gemini' : lastProvider === 'openai' ? 'OpenAI' : 'N/A'}
+            </div>
+          )}
           <button
             onClick={handleKeySetup}
             className={`px-4 py-2 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all ${hasApiKey ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100 animate-pulse'}`}
