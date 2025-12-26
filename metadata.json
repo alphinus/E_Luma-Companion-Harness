@@ -1,0 +1,9 @@
+{
+  "name": "Ideation Companion MVP",
+  "description": "A structured ideation workflow that transforms unstructured ideas into machine-readable CSV files synced with Google Drive.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
