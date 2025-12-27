@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { IdeationData, NormalizedIdea, VoiceExtraction, PersonData } from "../types";
+import { IdeationData, NormalizedIdea, VoiceExtraction, PersonData } from "../../types";
 
 const getAIClient = () => {
   return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });

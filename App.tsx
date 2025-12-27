@@ -8,6 +8,22 @@ import { saveToGoogleDrive, uploadImageToDrive, downloadCsvLocally, listIdeation
 const GOOGLE_CLIENT_ID = "1089918924198-0nnc8nuradga903ifa0vbn3c2usuan4p.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
 
+// Allowed users for this app
+const ALLOWED_USERS = ["eluma0001@gmail.com", "eluma0002@gmail.com"];
+
+// Generate UUID for each entry
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const ARCHITECT_BLOCKS = {
   roles: [
     { id: 'coach', label: 'Startup Coach', icon: '👨‍🏫', snippet: 'Du agierst als erfahrener Startup Coach.' },
@@ -38,6 +54,153 @@ const PRESETS: PromptPreset[] = [
   { id: 'mvp', name: 'Minimalist', description: 'Radikale Reduktion.', instructionModifier: 'Fokus auf den kleinsten Kern.', icon: '✂️' }
 ];
 
+// Photo Upload Grid Component with Camera/Gallery Choice
+const PhotoUploadGrid: React.FC<{
+  images: string[];
+  onImagesChange: (images: string[]) => void;
+}> = ({ images, onImagesChange }) => {
+  const cameraInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const galleryInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [showChoiceModal, setShowChoiceModal] = useState<number | null>(null);
+
+  const handleSlotClick = (index: number) => {
+    // If slot already has an image, don't show modal
+    if (images[index]) return;
+    setShowChoiceModal(index);
+  };
+
+  const handleCameraClick = () => {
+    if (showChoiceModal !== null) {
+      cameraInputRefs.current[showChoiceModal]?.click();
+      setShowChoiceModal(null);
+    }
+  };
+
+  const handleGalleryClick = () => {
+    if (showChoiceModal !== null) {
+      galleryInputRefs.current[showChoiceModal]?.click();
+      setShowChoiceModal(null);
+    }
+  };
+
+  const handleFileChange = (index: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const newImages = [...images];
+      while (newImages.length < 5) newImages.push('');
+      newImages[index] = reader.result as string;
+      onImagesChange(newImages);
+    };
+    reader.readAsDataURL(file);
+    // Reset the input so the same file can be selected again if needed
+    event.target.value = '';
+  };
+
+  const handleRemove = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newImages = [...images];
+    newImages[index] = '';
+    onImagesChange(newImages);
+  };
+
+  return (
+    <>
+      {/* Photo Source Choice Modal */}
+      {showChoiceModal !== null && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200"
+          onClick={() => setShowChoiceModal(null)}
+        >
+          <div
+            className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full mx-4 animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-black text-slate-900 mb-2 text-center">Foto hinzufügen</h3>
+            <p className="text-slate-400 text-sm mb-6 text-center">Wähle eine Quelle</p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleCameraClick}
+                className="flex items-center gap-4 p-4 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all active:scale-95 border-2 border-indigo-200"
+              >
+                <div className="w-12 h-12 bg-indigo-500 rounded-full flex items-center justify-center text-2xl">📷</div>
+                <div className="text-left">
+                  <span className="font-black text-slate-900 block">Kamera</span>
+                  <span className="text-xs text-slate-400">Neues Foto aufnehmen</span>
+                </div>
+              </button>
+
+              <button
+                onClick={handleGalleryClick}
+                className="flex items-center gap-4 p-4 bg-purple-50 hover:bg-purple-100 rounded-2xl transition-all active:scale-95 border-2 border-purple-200"
+              >
+                <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-2xl">📁</div>
+                <div className="text-left">
+                  <span className="font-black text-slate-900 block">Galerie</span>
+                  <span className="text-xs text-slate-400">Bestehendes Bild wählen</span>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowChoiceModal(null)}
+              className="w-full mt-4 py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors"
+            >
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Grid */}
+      <div className="grid grid-cols-5 gap-3 mt-6">
+        {[0, 1, 2, 3, 4].map((index) => (
+          <div
+            key={index}
+            onClick={() => handleSlotClick(index)}
+            className="relative aspect-square border-2 border-dashed border-red-400 rounded-xl flex items-center justify-center cursor-pointer hover:border-red-600 hover:bg-red-50 transition-all overflow-hidden group"
+          >
+            {/* Hidden Camera Input */}
+            <input
+              ref={(el) => (cameraInputRefs.current[index] = el)}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleFileChange(index, e)}
+            />
+            {/* Hidden Gallery Input (no capture) */}
+            <input
+              ref={(el) => (galleryInputRefs.current[index] = el)}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleFileChange(index, e)}
+            />
+
+            {images[index] ? (
+              <>
+                <img src={images[index]} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                <button
+                  onClick={(e) => handleRemove(index, e)}
+                  className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  ✕
+                </button>
+              </>
+            ) : (
+              <span className="text-red-500 font-black text-sm">Foto</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [step, setStep] = useState<WizardStep>(WizardStep.DASHBOARD);
@@ -46,8 +209,9 @@ const App: React.FC = () => {
   const [normalizedResult, setNormalizedResult] = useState<NormalizedIdea | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
   const [lastProvider, setLastProvider] = useState<ProviderType | null>(null);
-  const [serverStatus, setServerStatus] = useState<{ gemini: boolean; openai: boolean } | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ gemini: boolean; openai: boolean; groq: boolean } | null>(null);
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
 
   const [selectedPreset, setSelectedPreset] = useState<string>('normal');
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -84,13 +248,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (step === WizardStep.PROCESSING) {
-      setDebugLog(["🚀 Prozess gestartet..."]);
+      setDebugLog(["🚀 Prozess gestartet (HARDCODED TEST)..."]);
       const t1 = setTimeout(() => setDebugLog(p => [...p, "📡 Verbinde mit Vercel Serverless Function..."]), 1000);
       const t2 = setTimeout(() => setDebugLog(p => [...p, "⏳ Sende Daten an Backend-Proxy..."]), 2500);
-      const t3 = setTimeout(() => setDebugLog(p => [...p, "🤖 KI-Modell (Gemini/Gateway) wird angefragt..."]), 5000);
-      const t4 = setTimeout(() => setDebugLog(p => [...p, "⚠️ Dauert länger als üblich - Fallback aktiv?"]), 10000);
-      const t5 = setTimeout(() => setDebugLog(p => [...p, "🐢 Server arbeitet noch (Kaltstart?)..."]), 20000);
-      const t6 = setTimeout(() => setDebugLog(p => [...p, "❌ Timeout möglich - Bitte Seite neu laden falls nichts passiert."]), 45000);
+      const t3 = setTimeout(() => setDebugLog(p => [...p, "🚀 KI-Modell (Groq/Whisper-v3) HARDCODED wird angefragt..."]), 5000);
+      const t4 = setTimeout(() => setDebugLog(p => [...p, "⚠️ Dauert länger - OpenAI Fallback aktiv?"]), 10000);
+      const t5 = setTimeout(() => setDebugLog(p => [...p, "🐢 Server arbeitet noch..."]), 20000);
+      const t6 = setTimeout(() => setDebugLog(p => [...p, "❌ Timeout möglich."]), 45000);
 
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); clearTimeout(t6); };
     } else {
@@ -121,6 +285,13 @@ const App: React.FC = () => {
                   headers: { Authorization: `Bearer ${response.access_token}` }
                 });
                 const info = await userInfoRes.json();
+
+                // Validate user is in allowed list
+                if (!ALLOWED_USERS.includes(info.email)) {
+                  setError(`Zugriff verweigert: ${info.email} ist nicht autorisiert. Nur eluma0001@gmail.com und eluma0002@gmail.com sind erlaubt.`);
+                  setSelectedEmail(null);
+                  return;
+                }
 
                 setUser({
                   email: info.email,
@@ -186,9 +357,13 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const handleAuthClick = () => {
+  const handleAuthClick = (email?: string) => {
     if (tokenClientRef.current) {
-      tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
+      const options: any = { prompt: 'consent' };
+      if (email) {
+        options.hint = email;
+      }
+      tokenClientRef.current.requestAccessToken(options);
     } else {
       setError("Google Auth not initialized. Please refresh.");
     }
@@ -251,33 +426,56 @@ const App: React.FC = () => {
     if (!user) return;
     setLoading(true);
     setStep(WizardStep.PROCESSING);
-    setProcessingStatus({ step: 'KI analysiert Audio & erstellt Transkript...', progress: 20 });
+    setProcessingStatus({ step: 'KI analysiert Audio (Groq/Whisper-v3)...', progress: 20 });
+    setDebugLog(p => [...p, "🎙️ Audio-Blob erhalten, starte Konvertierung..."]);
+
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const { data: res, provider } = await llmService.processAudio(base64, blob.type, user, systemInstruction);
-        setLastProvider(provider);
+      // 1. Convert Blob to Base64 via Promise
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = () => reject(new Error("Fehler beim Lesen der Audio-Datei"));
+      });
+      setDebugLog(p => [...p, `✅ Base64 Konvertierung (Länge: ${base64.length})`]);
 
-        // Store the transcript for traceability
-        const transcript = res.transcript || "";
+      // 2. Call LLM Service
+      setDebugLog(p => [...p, "📡 Sende Anfrage an Backend (Groq primär)..."]);
+      const { data: res, provider } = await llmService.processAudio(base64, blob.type, user, systemInstruction);
+      setLastProvider(provider);
+      setDebugLog(p => [...p, `✨ Antwort erhalten von: ${provider.toUpperCase()}`]);
 
-        if (isPersonMode && res.extracted_person) {
-          setPersonData(p => ({ ...p, ...res.extracted_person }));
-          setStep(WizardStep.PERSON_PROFILE);
-        } else if (!isPersonMode && res.extracted_data) {
-          setFormData(f => ({ ...f, ...res.extracted_data, audioTranscript: transcript }));
-          setStep(WizardStep.REVIEW);
-        } else if (transcript) {
-          setFormData(f => ({ ...f, audioTranscript: transcript }));
-          setStep(WizardStep.REVIEW);
-        }
-        setLoading(false);
-      };
-    } catch (err) {
-      setError("Verarbeitung fehlgeschlagen.");
-      setStep(WizardStep.DASHBOARD);
+      // 3. Process Result
+      const transcript = res.transcript || "";
+      setDebugLog(p => [...p, `📝 Transkript: "${transcript.substring(0, 50)}..."`]);
+
+      if (isPersonMode && res.extracted_person) {
+        setDebugLog(p => [...p, "👤 Personen-Daten erkannt, wechsle Screen..."]);
+        setPersonData(p => ({ ...p, ...res.extracted_person }));
+        setStep(WizardStep.PERSON_PROFILE);
+      } else if (!isPersonMode && res.extracted_data) {
+        setDebugLog(p => [...p, "💡 App-Idee erkannt, wechsle zum Review..."]);
+        setFormData(f => ({ ...f, ...res.extracted_data, audioTranscript: transcript }));
+        setStep(WizardStep.REVIEW);
+      } else if (transcript) {
+        setDebugLog(p => [...p, "📝 Nur Transkript erhalten, öffne Review..."]);
+        setFormData(f => ({ ...f, audioTranscript: transcript }));
+        setStep(WizardStep.REVIEW);
+      } else {
+        setDebugLog(p => [...p, "⚠️ Keine Daten im Antwort-Objekt gefunden."]);
+        throw new Error("KI lieferte leeres Ergebnis");
+      }
+    } catch (err: any) {
+      console.error("Audio Processing error:", err);
+      const errorMsg = err.message || "Unbekannter KI- oder Netzwerkfehler";
+      setDebugLog(p => [...p, `❌ FEHLER: ${errorMsg}`]);
+      setError("Verarbeitung fehlgeschlagen: " + errorMsg);
+      // Wait 4 seconds so the user can read the error in the log before it jumps back
+      setTimeout(() => setStep(WizardStep.DASHBOARD), 4000);
+    } finally {
       setLoading(false);
     }
   };
@@ -423,6 +621,10 @@ const App: React.FC = () => {
         return (
           <WizardCard title="Projektname" description="Wie heißt die Vision?" onNext={() => setStep(WizardStep.PROBLEM)} onBack={() => setStep(WizardStep.DASHBOARD)} disabled={!formData.projectName}>
             <input type="text" placeholder="Name..." className="w-full p-4 border border-slate-200 rounded-xl outline-none text-xl focus:ring-2 focus:ring-indigo-500" value={formData.projectName} onChange={e => setFormData(f => ({ ...f, projectName: e.target.value }))} />
+            <PhotoUploadGrid
+              images={formData.images}
+              onImagesChange={(imgs) => setFormData(f => ({ ...f, images: imgs }))}
+            />
           </WizardCard>
         );
       case WizardStep.PROBLEM:
@@ -475,19 +677,124 @@ const App: React.FC = () => {
         return (
           <WizardCard title="Review" description="Launch bereit?" onNext={async () => {
             setStep(WizardStep.PROCESSING);
-            setProcessingStatus({ step: 'Finalisierung & Cloud-Sync...', progress: 80 });
+            setDebugLog(["🚀 Workflow gestartet..."]);
+
             try {
-              const { data: res, provider } = await llmService.normalize(formData, user!, systemInstruction);
-              setLastProvider(provider);
-              setNormalizedResult(res);
-              // Real Drive Sync
-              if (user?.accessToken) {
-                await saveToGoogleDrive(res, user.accessToken);
+              // Step 1: Try AI normalization (with fallback)
+              let normalizedData: any = null;
+              let usedProvider: ProviderType = 'none';
+
+              setProcessingStatus({ step: 'KI-Normalisierung...', progress: 20 });
+              setDebugLog(p => [...p, "📡 Rufe KI-Normalisierung auf..."]);
+
+              try {
+                const { data: res, provider } = await llmService.normalize(formData, user!, systemInstruction);
+                normalizedData = res;
+                usedProvider = provider;
+                setDebugLog(p => [...p, `✅ KI-Normalisierung via ${provider.toUpperCase()}`]);
+              } catch (normErr: any) {
+                console.warn("Normalize failed, using raw data:", normErr.message);
+                setDebugLog(p => [...p, `⚠️ KI fehlgeschlagen: ${normErr.message}`, "📝 Verwende Rohdaten als Fallback..."]);
+                // Fallback: use raw formData
+                normalizedData = {
+                  project_name: formData.projectName,
+                  problem_statement: formData.problemStatement,
+                  target_user: formData.targetUser,
+                  solution_summary: formData.solutionSummary,
+                  constraints: formData.constraints,
+                  differentiation: formData.differentiation,
+                  risks: formData.risks,
+                  next_action: formData.nextAction,
+                  tags: formData.tags,
+                  audio_transcript: formData.audioTranscript,
+                  status: 'raw',
+                  priority: 'medium',
+                  source: 'manual',
+                  version: '1.0',
+                  created_at: new Date().toISOString(),
+                };
+                usedProvider = 'none';
               }
+
+              setLastProvider(usedProvider);
+
+              // Step 2: Upload images with progress
+              let imageUrls: string[] = [];
+              const imagesToUpload = formData.images.filter(img => img && img.length > 0);
+              const totalImages = imagesToUpload.length;
+
+              if (totalImages > 0 && user?.accessToken) {
+                setDebugLog(p => [...p, `📷 Lade ${totalImages} Bild(er) hoch...`]);
+
+                for (let i = 0; i < formData.images.length; i++) {
+                  const img = formData.images[i];
+                  if (img) {
+                    const uploadedCount = imageUrls.length + 1;
+                    const percent = Math.round((uploadedCount / totalImages) * 100);
+                    setProcessingStatus({ step: `Bild ${uploadedCount}/${totalImages} hochladen... ${percent}%`, progress: 40 + (uploadedCount / totalImages) * 30 });
+                    setDebugLog(p => [...p, `📤 Bild ${uploadedCount}/${totalImages} (${percent}%)...`]);
+
+                    try {
+                      const url = await uploadImageToDrive(img, `${formData.projectName}_foto_${i + 1}.jpg`, user.accessToken);
+                      imageUrls.push(url);
+                      setDebugLog(p => [...p, `✅ Bild ${uploadedCount} hochgeladen`]);
+                    } catch (imgErr: any) {
+                      console.error(`Image ${i + 1} upload failed:`, imgErr);
+                      setDebugLog(p => [...p, `❌ Bild ${uploadedCount} fehlgeschlagen: ${imgErr.message}`]);
+                    }
+                  }
+                }
+              }
+
+              // Step 3: Merge and create final result with UUIDs
+              const entryUUID = generateUUID();
+              const sessionUUID = generateUUID(); // Links project with its photos
+              const finalResult = {
+                ...normalizedData,
+                idea_id: entryUUID,
+                session_uuid: sessionUUID, // For linking project <-> photos
+                created_by_email: user?.email || '',
+                image_url_1: imageUrls[0] || '',
+                image_url_2: imageUrls[1] || '',
+                image_url_3: imageUrls[2] || '',
+                image_url_4: imageUrls[3] || '',
+                image_url_5: imageUrls[4] || '',
+              };
+
+              console.log("Final Result with UUID:", finalResult);
+              setNormalizedResult(finalResult);
+              setDebugLog(p => [...p, `🔑 UUID: ${entryUUID.substring(0, 8)}...`]);
+
+              // Step 4: Save to Google Drive
+              if (user?.accessToken) {
+                setProcessingStatus({ step: 'Speichere CSV in Google Drive...', progress: 90 });
+                setDebugLog(p => [...p, "💾 Speichere CSV in Google Drive..."]);
+
+                try {
+                  await saveToGoogleDrive(finalResult, user.accessToken);
+                  setDebugLog(p => [...p, "✅ Google Drive Sync erfolgreich!"]);
+                } catch (driveErr: any) {
+                  console.error("Drive save failed:", driveErr);
+                  setDebugLog(p => [...p, `❌ Drive-Fehler: ${driveErr.message}`]);
+                  throw driveErr;
+                }
+              } else {
+                setDebugLog(p => [...p, "⚠️ Kein Access Token - Drive-Sync übersprungen"]);
+              }
+
+              setProcessingStatus({ step: 'Abgeschlossen!', progress: 100 });
+              setDebugLog(p => [...p, "🎉 Workflow abgeschlossen!"]);
+
+              // Brief delay to show success state
+              await new Promise(resolve => setTimeout(resolve, 500));
               setStep(WizardStep.SUCCESS);
+
             } catch (err: any) {
+              console.error("Save flow error:", err);
+              setDebugLog(p => [...p, `❌ KRITISCHER FEHLER: ${err.message}`]);
               setError("Fehler: " + err.message);
-              setStep(WizardStep.REVIEW);
+              // Wait 3 seconds so user can read error before going back
+              setTimeout(() => setStep(WizardStep.REVIEW), 3000);
             }
           }} onBack={() => setStep(WizardStep.DASHBOARD)} nextLabel="Abschließen">
             <div className="space-y-4">
@@ -500,6 +807,10 @@ const App: React.FC = () => {
                   <p className="text-xs text-slate-500 italic line-clamp-3">"{formData.audioTranscript}"</p>
                 </div>
               )}
+              <PhotoUploadGrid
+                images={formData.images}
+                onImagesChange={(imgs) => setFormData(f => ({ ...f, images: imgs }))}
+              />
             </div>
           </WizardCard>
         );
@@ -522,41 +833,60 @@ const App: React.FC = () => {
 
   if (!user) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-      <div className="max-w-xl w-full bg-white rounded-[3rem] shadow-2xl p-16 text-center animate-in zoom-in-95 duration-500">
+      <div className="max-w-xl w-full bg-white rounded-[3rem] shadow-2xl p-16 text-center animate-in zoom-in-95 duration-500 relative">
+        <div className="absolute top-8 right-8 flex gap-2">
+          {serverStatus && (
+            <>
+              <div className={`px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.gemini ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                <span>✨</span> {serverStatus.gemini ? 'Gemini' : 'N/A'}
+              </div>
+              <div className={`px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.openai ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                <span>🤖</span> {serverStatus.openai ? 'OpenAI' : 'N/A'}
+              </div>
+            </>
+          )}
+        </div>
         <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Ideation Companion</h1>
         <p className="text-slate-400 mb-12 font-medium">Production Cloud Access</p>
 
         <div className="flex flex-col items-center gap-6">
           <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center text-5xl shadow-inner">👤</div>
 
-          <button
-            onClick={handleAuthClick}
-            className="group flex items-center gap-4 px-10 py-6 bg-white border-2 border-slate-100 rounded-[2.5rem] hover:border-indigo-600 hover:shadow-2xl transition-all active:scale-95 shadow-md"
-          >
-            <svg className="w-8 h-8" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"></path><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"></path><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"></path><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"></path></svg>
-            <span className="font-black text-xl text-slate-900">Login mit Google</span>
-          </button>
+          <p className="text-slate-500 font-medium text-sm mb-2">Wähle dein Konto:</p>
 
-          <div className="flex items-center gap-4 w-full max-w-xs">
-            <div className="flex-1 h-px bg-slate-200"></div>
-            <span className="text-xs text-slate-400 font-medium">oder</span>
-            <div className="flex-1 h-px bg-slate-200"></div>
+          <div className="flex flex-col gap-3 w-full max-w-sm">
+            <button
+              onClick={() => handleAuthClick("eluma0001@gmail.com")}
+              className="group flex items-center gap-4 px-6 py-4 bg-white border-2 border-indigo-200 rounded-2xl hover:border-indigo-600 hover:shadow-xl transition-all active:scale-95 shadow-md w-full"
+            >
+              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-xl">1️⃣</div>
+              <div className="text-left">
+                <span className="font-black text-slate-900 block">eluma0001</span>
+                <span className="text-xs text-slate-400">@gmail.com</span>
+              </div>
+              <svg className="w-6 h-6 ml-auto text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+            </button>
+
+            <button
+              onClick={() => handleAuthClick("eluma0002@gmail.com")}
+              className="group flex items-center gap-4 px-6 py-4 bg-white border-2 border-purple-200 rounded-2xl hover:border-purple-600 hover:shadow-xl transition-all active:scale-95 shadow-md w-full"
+            >
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-xl">2️⃣</div>
+              <div className="text-left">
+                <span className="font-black text-slate-900 block">eluma0002</span>
+                <span className="text-xs text-slate-400">@gmail.com</span>
+              </div>
+              <svg className="w-6 h-6 ml-auto text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+            </button>
           </div>
 
-          <button
-            onClick={() => setUser({
-              email: 'guest@eluma.app',
-              name: 'Gast',
-              picture: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest',
-              baseInstruction: 'Du bist ein kreativer Ideengeber.',
-              preferredProvider: 'google'
-            })}
-            className="px-8 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all active:scale-95"
-          >
-            🚀 Ohne Login fortfahren
-          </button>
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-medium max-w-sm">
+              {error}
+            </div>
+          )}
 
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-4">Drive-Sync benötigt Google Login</p>
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-4">Nur autorisierte E_Luma Accounts</p>
         </div>
       </div>
     </div>
@@ -579,21 +909,23 @@ const App: React.FC = () => {
               }`}>
               {lastProvider === 'gemini' && '✨'}
               {lastProvider === 'openai' && '🤖'}
-              {lastProvider === 'gemini' ? 'Gemini' : lastProvider === 'openai' ? 'OpenAI' : 'N/A'}
+              {lastProvider === 'groq' && '🚀'}
+              {lastProvider === 'gemini' ? 'Gemini' : lastProvider === 'openai' ? 'OpenAI' : lastProvider === 'groq' ? 'Groq' : 'N/A'}
             </div>
           )}
-          <div className="flex gap-2">
-            {serverStatus ? (
+          <div className="flex gap-2 text-[10px]">
+            {serverStatus && (
               <>
-                <div className={`px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.gemini ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
-                  <span>✨</span> {serverStatus.gemini ? 'Gemini Ready' : 'No Gemini'}
+                <div className={`px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.groq ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                  <span>🚀</span> {serverStatus.groq ? 'Groq' : 'N/A'}
                 </div>
-                <div className={`px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.openai ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
-                  <span>🤖</span> {serverStatus.openai ? 'OpenAI Ready' : 'No OpenAI'}
+                <div className={`px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.openai ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                  <span>🤖</span> {serverStatus.openai ? 'OpenAI' : 'N/A'}
+                </div>
+                <div className={`px-2 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${serverStatus.gemini ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-100 opacity-50'}`}>
+                  <span>✨</span> {serverStatus.gemini ? 'Gemini' : 'N/A'}
                 </div>
               </>
-            ) : (
-              <div className="animate-pulse bg-slate-100 w-24 h-8 rounded-xl"></div>
             )}
           </div>
           <div className="h-8 w-[1px] bg-slate-100 mx-2"></div>

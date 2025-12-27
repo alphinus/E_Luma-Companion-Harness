@@ -1,6 +1,6 @@
 
 import OpenAI from "openai";
-import { IdeationData, PersonData, NormalizedIdea, VoiceExtraction } from "../types";
+import { IdeationData, PersonData, NormalizedIdea, VoiceExtraction } from "../../types";
 
 const getOpenAIClient = () => {
     return new OpenAI({ apiKey: "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" });
