@@ -11,6 +11,11 @@ const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapi
 // Allowed users for this app
 const ALLOWED_USERS = ["eluma0001@gmail.com", "eluma0002@gmail.com"];
 
+// User avatars (custom profile pictures)
+const USER_AVATARS: Record<string, string> = {
+  'eluma0001@gmail.com': '/avatars/eluma0001.png',
+};
+
 // Generate UUID for each entry
 const generateUUID = (): string => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -165,7 +170,7 @@ const PhotoUploadGrid: React.FC<{
           >
             {/* Hidden Camera Input */}
             <input
-              ref={(el) => (cameraInputRefs.current[index] = el)}
+              ref={(el) => { cameraInputRefs.current[index] = el; }}
               type="file"
               accept="image/*"
               capture="environment"
@@ -174,7 +179,7 @@ const PhotoUploadGrid: React.FC<{
             />
             {/* Hidden Gallery Input (no capture) */}
             <input
-              ref={(el) => (galleryInputRefs.current[index] = el)}
+              ref={(el) => { galleryInputRefs.current[index] = el; }}
               type="file"
               accept="image/*"
               className="hidden"
@@ -245,10 +250,11 @@ const App: React.FC = () => {
   const resetForNewIdeation = () => {
     setFormData(initialFormData);
     setNormalizedResult(null);
-    setAudioBlob(null);
     setProcessingStatus({ step: '', progress: 0 });
     setDebugLog([]);
     setError(null);
+    setRecordingTime(0);
+    audioChunksRef.current = [];
     console.log("[App] Form reset for new ideation");
   };
 
@@ -929,7 +935,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col font-inter">
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 py-5 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black shadow-lg">C</div>
+          <img src="/logo.png" alt="E_Luma" className="w-10 h-10 object-contain" />
           <span className="text-xl font-black text-slate-900 uppercase tracking-tight">Companion</span>
         </div>
         <div className="flex items-center gap-4">
@@ -962,7 +968,11 @@ const App: React.FC = () => {
             )}
           </div>
           <div className="h-8 w-[1px] bg-slate-100 mx-2"></div>
-          <img src={user.picture} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+          <img
+            src={USER_AVATARS[user.email] || user.picture}
+            alt={user.email}
+            className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover"
+          />
           <button onClick={() => setUser(null)} className="text-slate-300 hover:text-red-500 transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg></button>
         </div>
       </header>

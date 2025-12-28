@@ -3,7 +3,7 @@ import { NormalizedIdea } from "../types";
 
 // Hardcoded folder IDs for each user (pre-existing shared folders)
 const USER_FOLDER_IDS: Record<string, string> = {
-  'eluma0001@gmail.com': '1KvSOQbj6Ff5h7-Md9usct_mGayyP42Qx',
+  'eluma0001@gmail.com': '1eBRPg4H2IbWb7tPgGdrat3XW-amGlWug',
   'eluma0002@gmail.com': '1HRFd_oDZs1PFRyDFpwixR8fFqpObDHey',
 };
 
