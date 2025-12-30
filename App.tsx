@@ -1078,15 +1078,16 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {/* Scrollable list - mobile first */}
+                  <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
                     {savedIdeas.map((idea) => (
                       <button
                         key={idea.fileId}
                         onClick={() => openIdeaForEdit(idea)}
-                        className="group bg-slate-50 rounded-2xl p-4 text-left hover:bg-indigo-50 hover:shadow-lg transition-all border-2 border-transparent hover:border-indigo-200"
+                        className="w-full group bg-slate-50 rounded-2xl p-3 text-left hover:bg-indigo-50 hover:shadow-lg transition-all border-2 border-transparent hover:border-indigo-200 flex items-center gap-4"
                       >
-                        {/* Thumbnail */}
-                        <div className="aspect-video bg-slate-200 rounded-xl mb-3 overflow-hidden flex items-center justify-center">
+                        {/* Thumbnail (left) */}
+                        <div className="w-16 h-16 flex-shrink-0 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
                           {idea.thumbnailUrl ? (
                             <img
                               src={idea.thumbnailUrl}
@@ -1094,32 +1095,40 @@ const App: React.FC = () => {
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
-                                (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-3xl">💡</span>';
+                                (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-2xl">💡</span>';
                               }}
                             />
                           ) : (
-                            <span className="text-3xl">💡</span>
+                            <span className="text-2xl">💡</span>
                           )}
                         </div>
 
-                        {/* Title */}
-                        <h3 className="font-black text-slate-900 text-sm truncate mb-1 group-hover:text-indigo-700">
-                          {idea.data.project_name || 'Ohne Titel'}
-                        </h3>
+                        {/* Content (right) */}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-black text-slate-900 text-sm truncate group-hover:text-indigo-700">
+                            {idea.data.project_name || 'Ohne Titel'}
+                          </h3>
+                          <p className="text-xs text-slate-500 truncate mt-0.5">
+                            {idea.data.problem_statement?.substring(0, 50) || 'Keine Beschreibung'}
+                          </p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">
+                            {new Date(idea.createdTime).toLocaleDateString('de-DE', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </p>
+                        </div>
 
-                        {/* Date */}
-                        <p className="text-[10px] text-slate-400 uppercase tracking-widest">
-                          {new Date(idea.createdTime).toLocaleDateString('de-DE', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </p>
+                        {/* Arrow indicator */}
+                        <svg className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
                       </button>
                     ))}
                   </div>
 
-                  <p className="text-center text-slate-400 text-xs mt-6">
+                  <p className="text-center text-slate-400 text-xs mt-4 pt-3 border-t border-slate-100">
                     {savedIdeas.length} {savedIdeas.length === 1 ? 'Idee' : 'Ideen'} gefunden
                   </p>
                 </>
