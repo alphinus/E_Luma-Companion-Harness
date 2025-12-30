@@ -260,6 +260,7 @@ const App: React.FC = () => {
   } | null>(null);
   const [showImageChangeModal, setShowImageChangeModal] = useState(false);
   const [pendingEditIdea, setPendingEditIdea] = useState<SavedIdea | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   // Reset form for new ideation
   const resetForNewIdeation = () => {
@@ -305,6 +306,7 @@ const App: React.FC = () => {
       }
 
       setSavedIdeas(ideas);
+      setLastRefreshed(new Date());
       console.log(`[MyIdeas] Loaded ${ideas.length} ideas`);
     } catch (err: any) {
       console.error("[MyIdeas] Load error:", err);
@@ -1049,15 +1051,22 @@ const App: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
-                  <h2 className="text-2xl font-black text-slate-900">📚 Meine Ideen</h2>
+                  <h2 className="text-2xl font-black text-slate-900">📚 Meine Ideen ({savedIdeas.length})</h2>
                 </div>
-                <button
-                  onClick={loadMyIdeas}
-                  className="px-4 py-2 bg-slate-100 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-colors"
-                  disabled={loadingIdeas}
-                >
-                  {loadingIdeas ? '...' : '🔄 Aktualisieren'}
-                </button>
+                <div className="flex items-center gap-3">
+                  {lastRefreshed && (
+                    <span className="text-[10px] text-slate-400 font-medium hidden sm:block">
+                      Aktualisiert: {lastRefreshed.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr
+                    </span>
+                  )}
+                  <button
+                    onClick={loadMyIdeas}
+                    className="px-4 py-2 bg-slate-100 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                    disabled={loadingIdeas}
+                  >
+                    {loadingIdeas ? '...' : '🔄 Aktualisieren'}
+                  </button>
+                </div>
               </div>
 
               {loadingIdeas ? (
@@ -1112,7 +1121,7 @@ const App: React.FC = () => {
                             {idea.data.problem_statement?.substring(0, 50) || 'Keine Beschreibung'}
                           </p>
                           <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">
-                            {new Date(idea.createdTime).toLocaleDateString('de-DE', {
+                            {new Date(idea.data.created_at).toLocaleDateString('de-DE', {
                               day: '2-digit',
                               month: 'short',
                               year: 'numeric'
@@ -1185,10 +1194,15 @@ const App: React.FC = () => {
 
                 // Step 2: Build updated idea
                 setDebugLog(p => [...p, "📝 Erstelle aktualisierte Daten..."]);
+
+                // CRITICAL: Preserve the original creation date from the loaded CSV
+                const originalCreatedAt = normalizedResult?.created_at;
+                console.log(`[Edit] Preserving original date: ${originalCreatedAt}`);
+
                 const updatedIdea: NormalizedIdea = {
                   idea_id: normalizedResult?.idea_id || generateUUID(),
                   session_uuid: editMode.sessionUUID || normalizedResult?.session_uuid || '',
-                  created_at: normalizedResult?.created_at || new Date().toISOString(),
+                  created_at: originalCreatedAt || new Date().toISOString(),
                   created_by_email: user.email || '',
                   project_name: formData.projectName,
                   problem_statement: formData.problemStatement,
