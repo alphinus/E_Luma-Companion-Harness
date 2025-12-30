@@ -107,7 +107,7 @@ export const saveToGoogleDrive = async (
   accessToken: string,
   userEmail?: string,
   customFileName?: string
-): Promise<{ fileId: string; webContentLink?: string }> => {
+): Promise<{ id: string; name?: string; createdTime?: string; webContentLink?: string }> => {
   const headers = [
     "idea_id", "session_uuid", "created_at", "created_by_email", "project_name",
     "problem_statement", "target_user", "solution_summary", "constraints",
@@ -142,7 +142,7 @@ export const saveToGoogleDrive = async (
     form.append('file', new Blob([csvContent], { type: 'text/csv' }));
 
     const response = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webContentLink',
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime,webContentLink',
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}` },

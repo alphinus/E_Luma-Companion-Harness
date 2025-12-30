@@ -278,39 +278,94 @@ const App: React.FC = () => {
   };
 
   // ===== MY IDEAS FUNCTIONS =====
-  const loadMyIdeas = async () => {
+  const loadMyIdeas = async (forceRefresh = false) => {
     if (!user?.accessToken || !user?.email) return;
+
+    const cacheKey = `luma_cache_${user.email}`;
+
+    // Step 1: Initialize list from cache (instant)
+    if (savedIdeas.length === 0 || forceRefresh) {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsedCache = JSON.parse(cached);
+          setSavedIdeas(parsedCache);
+          console.log(`[MyIdeas] Loaded ${parsedCache.length} ideas from cache`);
+        }
+      } catch (e) {
+        console.warn("[MyIdeas] Cache load error", e);
+      }
+    }
 
     setLoadingIdeas(true);
     setError(null);
 
     try {
-      const files = await listIdeationFilesForUser(user.accessToken, user.email);
-      const ideas: SavedIdea[] = [];
+      // Step 2: Fetch metadata from Drive (fast)
+      const driveFiles = await listIdeationFilesForUser(user.accessToken, user.email);
 
-      // Limit to last 20 for performance
-      for (const file of files.slice(0, 20)) {
-        try {
-          const content = await getFileContent(file.id, user.accessToken);
-          const parsed = parseCSVToIdea(content);
-          ideas.push({
-            fileId: file.id,
-            fileName: file.name,
-            createdTime: file.createdTime,
-            data: parsed,
-            thumbnailUrl: parsed.image_url_1 || undefined
-          });
-        } catch (parseErr) {
-          console.warn(`[MyIdeas] Failed to parse ${file.name}:`, parseErr);
+      // Step 3: Compare with current list
+      const currentList = savedIdeas.length > 0 ? savedIdeas : (JSON.parse(localStorage.getItem(cacheKey) || '[]'));
+      const updatedIdeas: SavedIdea[] = [];
+      const filesToFetch: any[] = [];
+
+      // Limit to 20 files
+      const topFiles = driveFiles.slice(0, 20);
+
+      for (const file of topFiles) {
+        const cachedIdea = currentList.find((i: SavedIdea) => i.fileId === file.id);
+
+        // If file exists and not changed, reuse cached data
+        if (cachedIdea && cachedIdea.createdTime === file.createdTime) {
+          updatedIdeas.push(cachedIdea);
+        } else {
+          // Missing or updated, add to fetch queue
+          filesToFetch.push(file);
         }
       }
 
-      setSavedIdeas(ideas);
+      // Step 4: Fetch missing contents in PARALLEL
+      if (filesToFetch.length > 0) {
+        console.log(`[MyIdeas] Fetching ${filesToFetch.length} new/updated files in parallel...`);
+
+        const fetchPromises = filesToFetch.map(async (file) => {
+          try {
+            const content = await getFileContent(file.id, user.accessToken!);
+            const parsed = parseCSVToIdea(content);
+            return {
+              fileId: file.id,
+              fileName: file.name,
+              createdTime: file.createdTime,
+              data: parsed,
+              thumbnailUrl: parsed.image_url_1 || undefined
+            };
+          } catch (err) {
+            console.warn(`[MyIdeas] Failed to fetch ${file.name}`, err);
+            return null;
+          }
+        });
+
+        const newResults = await Promise.all(fetchPromises);
+        newResults.forEach(res => {
+          if (res) updatedIdeas.push(res);
+        });
+      }
+
+      // Step 5: Sort by createdTime (Drive metadata)
+      updatedIdeas.sort((a, b) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+
+      // Step 6: Update state and cache
+      setSavedIdeas(updatedIdeas);
+      localStorage.setItem(cacheKey, JSON.stringify(updatedIdeas));
       setLastRefreshed(new Date());
-      console.log(`[MyIdeas] Loaded ${ideas.length} ideas`);
+      console.log(`[MyIdeas] Background sync complete. Total: ${updatedIdeas.length}`);
+
     } catch (err: any) {
-      console.error("[MyIdeas] Load error:", err);
-      setError("Ideen konnten nicht geladen werden: " + err.message);
+      console.error("[MyIdeas] Sync error:", err);
+      // Don't show error if we have cached results, unless it's a force refresh
+      if (forceRefresh || savedIdeas.length === 0) {
+        setError("Fehler beim Synchronisieren: " + err.message);
+      }
     } finally {
       setLoadingIdeas(false);
     }
@@ -510,6 +565,14 @@ const App: React.FC = () => {
       }
     };
   }, [step]);
+
+  // Background sync on login
+  useEffect(() => {
+    if (user?.accessToken && user?.email) {
+      console.log("[MyIdeas] User authorized, starting background sync...");
+      loadMyIdeas(false);
+    }
+  }, [user?.accessToken]);
 
   const handleKeySetup = async () => {
     // @ts-ignore
@@ -923,8 +986,23 @@ const App: React.FC = () => {
                 setDebugLog(p => [...p, `💾 Speichere: ${csvFileName}`]);
 
                 try {
-                  await saveToGoogleDrive(finalResult, user.accessToken, user.email, csvFileName);
+                  const driveResult = await saveToGoogleDrive(finalResult, user.accessToken, user.email, csvFileName);
                   setDebugLog(p => [...p, "✅ Google Drive Sync erfolgreich!"]);
+
+                  // Update local cache immediately
+                  const cacheKey = `luma_cache_${user.email}`;
+                  const newSavedIdea: SavedIdea = {
+                    fileId: driveResult.id,
+                    fileName: driveResult.name || csvFileName,
+                    createdTime: driveResult.createdTime || new Date().toISOString(),
+                    data: finalResult,
+                    thumbnailUrl: finalResult.image_url_1 || undefined
+                  };
+
+                  const newSavedIdeas = [newSavedIdea, ...savedIdeas].slice(0, 20);
+                  setSavedIdeas(newSavedIdeas);
+                  localStorage.setItem(cacheKey, JSON.stringify(newSavedIdeas));
+
                 } catch (driveErr: any) {
                   console.error("Drive save failed:", driveErr);
                   setDebugLog(p => [...p, `❌ Drive-Fehler: ${driveErr.message}`]);
@@ -1069,10 +1147,18 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {loadingIdeas ? (
+              {/* Background Sync Indicator */}
+              {loadingIdeas && savedIdeas.length > 0 && (
+                <div className="flex items-center gap-2 mb-4 bg-indigo-50/50 text-indigo-600 px-4 py-2 rounded-2xl animate-pulse">
+                  <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Synchronisiere mit Google Drive...</span>
+                </div>
+              )}
+
+              {loadingIdeas && savedIdeas.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16">
                   <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-slate-400 font-medium">Lade Ideen...</p>
+                  <p className="text-slate-400 font-medium">Suche Ideen in Google Drive...</p>
                 </div>
               ) : savedIdeas.length === 0 ? (
                 <div className="text-center py-16">
@@ -1231,6 +1317,20 @@ const App: React.FC = () => {
 
                 await updateFileInDrive(editMode.fileId, updatedIdea, user.accessToken);
                 setDebugLog(p => [...p, "✅ Google Drive Update erfolgreich!"]);
+
+                // Step 4: Update local cache immediately
+                const cacheKey = `luma_cache_${user.email}`;
+                const newSavedIdea: SavedIdea = {
+                  fileId: editMode.fileId,
+                  fileName: editMode.fileName,
+                  createdTime: new Date().toISOString(), // Use now as the modified indicator for sync
+                  data: updatedIdea,
+                  thumbnailUrl: updatedIdea.image_url_1 || undefined
+                };
+
+                const newSavedIdeas = savedIdeas.map(i => i.fileId === editMode.fileId ? newSavedIdea : i);
+                setSavedIdeas(newSavedIdeas);
+                localStorage.setItem(cacheKey, JSON.stringify(newSavedIdeas));
 
                 setNormalizedResult(updatedIdea);
                 setProcessingStatus({ step: 'Abgeschlossen!', progress: 100 });
