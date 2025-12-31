@@ -136,14 +136,26 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({
       if (!response.ok) throw new Error('Analyse fehlgeschlagen');
 
       const result = await response.json();
-      setAiAnalysis(result);
 
-      if (result.needsMoreInfo) {
+      // Map API response to expected format
+      const mappedAnalysis: AIAnalysis = {
+        projectType: result.suggestedType || 'SaaS',
+        techStack: result.suggestedTechStack || {},
+        suggestedFeatures: result.suggestedFeatures || [],
+        reasoning: result.typeReason || 'Basierend auf deiner Idee',
+        confidence: result.inputQuality === 'strong' ? 'high' : result.inputQuality === 'medium' ? 'medium' : 'low',
+        needsMoreInfo: result.inputQuality === 'weak',
+        questions: result.questions,
+      };
+
+      setAiAnalysis(mappedAnalysis);
+
+      if (mappedAnalysis.needsMoreInfo) {
         setStep('questions');
       } else {
-        setProjectType(result.projectType || 'SaaS');
-        setTechStack(result.techStack || {});
-        setMainFeatures(result.suggestedFeatures?.length > 0 ? result.suggestedFeatures : ['']);
+        setProjectType(mappedAnalysis.projectType);
+        setTechStack(mappedAnalysis.techStack);
+        setMainFeatures(mappedAnalysis.suggestedFeatures?.length > 0 ? mappedAnalysis.suggestedFeatures : ['']);
         setStep('suggestion');
       }
     } catch (err: any) {
