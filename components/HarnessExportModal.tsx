@@ -6,48 +6,173 @@ interface HarnessExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   idea: NormalizedIdea;
+  onSaveFeatures?: (features: string[], techStack: Record<string, string>, projectType: string) => void;
 }
 
-const TECH_OPTIONS = {
-  backend: ['Node.js + Express', 'Next.js API Routes', 'FastAPI (Python)', 'Django', 'Go + Fiber', 'Custom'],
-  database: ['Supabase', 'PostgreSQL', 'MongoDB', 'MySQL', 'Firebase', 'Custom'],
-  frontend: ['Next.js 14', 'React + Vite', 'Vue 3', 'Svelte', 'Solid.js', 'Custom'],
-  auth: ['Supabase Auth', 'Auth0', 'Clerk', 'NextAuth', 'Custom JWT', 'Custom'],
-  hosting: ['Vercel', 'Railway', 'Render', 'AWS', 'Google Cloud', 'Custom'],
-  payments: ['Stripe', 'LemonSqueezy', 'Paddle', 'None', 'Custom'],
-  email: ['Resend', 'SendGrid', 'AWS SES', 'None', 'Custom']
+// Projekt-Typ-spezifische Tech-Stacks
+const TECH_STACKS_BY_TYPE: Record<string, Record<string, string[]>> = {
+  'Mobile App': {
+    framework: ['React Native', 'Flutter', 'Kotlin (Android)', 'Swift (iOS)', 'Expo', 'Custom'],
+    backend: ['Firebase', 'Supabase', 'AWS Amplify', 'Custom REST API', 'None (Offline-First)'],
+    database: ['Firestore', 'Firebase Realtime DB', 'SQLite', 'Realm', 'None'],
+    auth: ['Firebase Auth', 'Auth0', 'Supabase Auth', 'Biometric', 'Custom'],
+    distribution: ['Google Play', 'App Store', 'Both', 'Internal/Enterprise'],
+  },
+  'SaaS': {
+    backend: ['Node.js + Express', 'Next.js API Routes', 'FastAPI (Python)', 'Django', 'Go + Fiber'],
+    database: ['Supabase', 'PostgreSQL', 'MongoDB', 'PlanetScale', 'MySQL'],
+    frontend: ['Next.js 14', 'React + Vite', 'Vue 3', 'Svelte', 'SolidJS'],
+    auth: ['Supabase Auth', 'Auth0', 'Clerk', 'NextAuth', 'Custom JWT'],
+    hosting: ['Vercel', 'Railway', 'Render', 'AWS', 'Google Cloud'],
+    payments: ['Stripe', 'LemonSqueezy', 'Paddle', 'None'],
+  },
+  'Tool': {
+    backend: ['Node.js + Express', 'FastAPI (Python)', 'Go', 'None (Frontend-only)'],
+    database: ['SQLite', 'PostgreSQL', 'IndexedDB', 'None'],
+    frontend: ['React + Vite', 'Next.js', 'Vue 3', 'Vanilla JS'],
+    auth: ['None', 'Simple Login', 'OAuth'],
+    hosting: ['Vercel', 'Netlify', 'GitHub Pages', 'Self-hosted'],
+  },
+  'API': {
+    framework: ['Express', 'FastAPI', 'NestJS', 'Django REST', 'Go Fiber', 'Hono'],
+    database: ['PostgreSQL', 'MongoDB', 'Redis', 'DynamoDB', 'SQLite'],
+    auth: ['JWT', 'API Keys', 'OAuth2', 'None (Internal)'],
+    docs: ['OpenAPI/Swagger', 'GraphQL Playground', 'Postman Collection', 'None'],
+    hosting: ['Railway', 'Render', 'AWS Lambda', 'Google Cloud Run'],
+  },
+  'CLI': {
+    language: ['TypeScript/Node.js', 'Python', 'Go', 'Rust', 'Bash'],
+    packaging: ['npm', 'pip', 'brew', 'cargo', 'Binary'],
+    features: ['Interactive prompts', 'Config files', 'Plugins', 'Shell completion'],
+  },
+  'Library': {
+    language: ['TypeScript', 'JavaScript', 'Python', 'Go', 'Rust'],
+    packaging: ['npm', 'pip', 'cargo', 'go modules'],
+    testing: ['Jest', 'Vitest', 'pytest', 'Go test'],
+    docs: ['TypeDoc', 'Storybook', 'Docusaurus', 'README only'],
+  },
 };
 
-const PROJECT_TYPES: HarnessExportInput['projectType'][] = ['SaaS', 'Tool', 'API', 'Mobile App', 'CLI', 'Library'];
+const PROJECT_TYPES = ['SaaS', 'Tool', 'API', 'Mobile App', 'CLI', 'Library'] as const;
+type ProjectType = typeof PROJECT_TYPES[number];
 
-export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, onClose, idea }) => {
-  const [step, setStep] = useState<'config' | 'features' | 'generating' | 'preview'>('config');
-  const [techStack, setTechStack] = useState<TechStack>({
-    backend: 'Node.js + Express',
-    database: 'Supabase',
-    frontend: 'Next.js 14',
-    auth: 'Supabase Auth',
-    hosting: 'Vercel',
-    payments: '',
-    email: ''
-  });
-  const [projectType, setProjectType] = useState<HarnessExportInput['projectType']>('SaaS');
+interface AIAnalysis {
+  projectType: ProjectType;
+  techStack: Record<string, string>;
+  suggestedFeatures: string[];
+  reasoning: string;
+  confidence: 'high' | 'medium' | 'low';
+  needsMoreInfo: boolean;
+  questions?: string[];
+}
+
+export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({
+  isOpen,
+  onClose,
+  idea,
+  onSaveFeatures
+}) => {
+  // Steps: 'analyzing' | 'suggestion' | 'questions' | 'config' | 'features' | 'generating' | 'preview'
+  const [step, setStep] = useState<string>('analyzing');
+  const [projectType, setProjectType] = useState<ProjectType>('SaaS');
+  const [techStack, setTechStack] = useState<Record<string, string>>({});
   const [mainFeatures, setMainFeatures] = useState<string[]>(['']);
   const [generatedSpec, setGeneratedSpec] = useState<HarnessSpec | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useBasicMode, setUseBasicMode] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [hasExistingData, setHasExistingData] = useState(false);
 
-  // Reset state when modal opens
+  // Load existing data or start AI analysis when modal opens
   useEffect(() => {
     if (isOpen) {
-      setStep('config');
       setError(null);
       setGeneratedSpec(null);
-    }
-  }, [isOpen]);
 
-  const handleTechChange = (key: keyof TechStack, value: string) => {
+      // Check for existing harness data
+      if (idea.harness_features) {
+        try {
+          const savedFeatures = JSON.parse(idea.harness_features);
+          const savedTechStack = idea.harness_tech_stack ? JSON.parse(idea.harness_tech_stack) : {};
+          const savedType = (idea.harness_project_type as ProjectType) || 'SaaS';
+
+          setMainFeatures(savedFeatures.length > 0 ? savedFeatures : ['']);
+          setTechStack(savedTechStack);
+          setProjectType(savedType);
+          setHasExistingData(true);
+          setStep('features'); // Skip directly to features
+        } catch (e) {
+          startAIAnalysis();
+        }
+      } else {
+        startAIAnalysis();
+      }
+    }
+  }, [isOpen, idea]);
+
+  const startAIAnalysis = async () => {
+    setStep('analyzing');
+    setIsLoading(true);
+    setHasExistingData(false);
+
+    try {
+      const response = await fetch('/api/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'analyzeForHarness',
+          idea: {
+            project_name: idea.project_name,
+            problem_statement: idea.problem_statement,
+            solution_summary: idea.solution_summary,
+            target_user: idea.target_user,
+            constraints: idea.constraints,
+            tags: idea.tags,
+          }
+        })
+      });
+
+      if (!response.ok) throw new Error('Analyse fehlgeschlagen');
+
+      const result = await response.json();
+      setAiAnalysis(result);
+
+      if (result.needsMoreInfo) {
+        setStep('questions');
+      } else {
+        setProjectType(result.projectType || 'SaaS');
+        setTechStack(result.techStack || {});
+        setMainFeatures(result.suggestedFeatures?.length > 0 ? result.suggestedFeatures : ['']);
+        setStep('suggestion');
+      }
+    } catch (err: any) {
+      console.error('AI Analysis failed:', err);
+      // Fallback to manual mode
+      setStep('config');
+      initializeDefaultTechStack('SaaS');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const initializeDefaultTechStack = (type: ProjectType) => {
+    const typeStacks = TECH_STACKS_BY_TYPE[type];
+    if (typeStacks) {
+      const defaults: Record<string, string> = {};
+      Object.keys(typeStacks).forEach(key => {
+        defaults[key] = typeStacks[key][0] || '';
+      });
+      setTechStack(defaults);
+    }
+  };
+
+  const handleProjectTypeChange = (type: ProjectType) => {
+    setProjectType(type);
+    initializeDefaultTechStack(type);
+  };
+
+  const handleTechChange = (key: string, value: string) => {
     setTechStack(prev => ({ ...prev, [key]: value }));
   };
 
@@ -69,6 +194,14 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
     }
   };
 
+  const acceptSuggestion = () => {
+    setStep('features');
+  };
+
+  const editSuggestion = () => {
+    setStep('config');
+  };
+
   const handleGenerate = async () => {
     const validFeatures = mainFeatures.filter(f => f.trim().length > 0);
     if (validFeatures.length < 3) {
@@ -78,10 +211,27 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
 
     setError(null);
     setStep('generating');
-    setIsGenerating(true);
+    setIsLoading(true);
 
     try {
-      const input = ideaToExportInput(idea, techStack, validFeatures, projectType);
+      // Save features to idea (via callback)
+      if (onSaveFeatures) {
+        onSaveFeatures(validFeatures, techStack, projectType);
+      }
+
+      const input: HarnessExportInput = {
+        projectName: idea.project_name,
+        problemStatement: idea.problem_statement,
+        targetAudience: idea.target_user,
+        solution: idea.solution_summary,
+        constraints: idea.constraints,
+        differentiation: idea.differentiation,
+        risks: idea.risks,
+        nextSteps: idea.next_action,
+        techStack: techStack as TechStack,
+        mainFeatures: validFeatures,
+        projectType: projectType,
+      };
 
       let spec: HarnessSpec;
       if (useBasicMode) {
@@ -96,7 +246,7 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
       setError(err.message || 'Generierung fehlgeschlagen');
       setStep('features');
     } finally {
-      setIsGenerating(false);
+      setIsLoading(false);
     }
   };
 
@@ -116,6 +266,8 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
   };
 
   if (!isOpen) return null;
+
+  const currentTechOptions = TECH_STACKS_BY_TYPE[projectType] || {};
 
   return (
     <div
@@ -142,15 +294,146 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Step: Config */}
+
+          {/* Step: Analyzing */}
+          {step === 'analyzing' && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-20 h-20 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Analysiere deine Idee...</h3>
+              <p className="text-slate-400 text-sm text-center">
+                KI erkennt Projekt-Typ, Tech-Stack und Features
+              </p>
+            </div>
+          )}
+
+          {/* Step: AI Suggestion */}
+          {step === 'suggestion' && aiAnalysis && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-indigo-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">🤖</span>
+                  <h3 className="font-bold text-slate-900">KI-Vorschlag</h3>
+                  <span className={`ml-auto px-2 py-1 rounded-full text-xs font-bold ${
+                    aiAnalysis.confidence === 'high' ? 'bg-green-100 text-green-700' :
+                    aiAnalysis.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {aiAnalysis.confidence === 'high' ? 'Hohe Konfidenz' :
+                     aiAnalysis.confidence === 'medium' ? 'Mittlere Konfidenz' : 'Niedrige Konfidenz'}
+                  </span>
+                </div>
+
+                <p className="text-slate-600 text-sm mb-4 italic">"{aiAnalysis.reasoning}"</p>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📱</span>
+                    <div>
+                      <div className="text-xs font-bold text-slate-500 uppercase">Projekt-Typ</div>
+                      <div className="font-bold text-slate-900">{aiAnalysis.projectType}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-bold text-slate-500 uppercase mb-2">🛠️ Tech-Stack</div>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(aiAnalysis.techStack).map(([key, value]) => (
+                        <span key={key} className="px-3 py-1 bg-white rounded-full text-sm border border-slate-200">
+                          <span className="text-slate-500">{key}:</span> <span className="font-bold">{value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-bold text-slate-500 uppercase mb-2">🎯 Erkannte Features</div>
+                    <ul className="space-y-1">
+                      {aiAnalysis.suggestedFeatures.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm">
+                          <span className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={acceptSuggestion}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-600 transition-colors"
+                >
+                  ✓ Übernehmen
+                </button>
+                <button
+                  onClick={editSuggestion}
+                  className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 transition-colors"
+                >
+                  ✏️ Anpassen
+                </button>
+              </div>
+              <button
+                onClick={startAIAnalysis}
+                className="w-full py-2 text-indigo-600 font-bold text-sm hover:text-indigo-700"
+              >
+                🔄 Neu analysieren
+              </button>
+            </div>
+          )}
+
+          {/* Step: Questions (for weak input) */}
+          {step === 'questions' && aiAnalysis?.questions && (
+            <div className="space-y-6">
+              <div className="bg-yellow-50 rounded-2xl p-6 border-2 border-yellow-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">❓</span>
+                  <h3 className="font-bold text-slate-900">Zusätzliche Infos benötigt</h3>
+                </div>
+                <p className="text-slate-600 text-sm mb-4">
+                  Deine Idee ist noch zu vage für eine optimale Spec. Bitte beantworte kurz:
+                </p>
+                {/* Questions would be rendered here - for now skip to config */}
+              </div>
+              <button
+                onClick={() => { setStep('config'); initializeDefaultTechStack('SaaS'); }}
+                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl"
+              >
+                Manuell konfigurieren →
+              </button>
+            </div>
+          )}
+
+          {/* Step: Config (Tech Stack & Type) */}
           {step === 'config' && (
             <div className="space-y-6">
               <div>
                 <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
-                  <span className="text-2xl">🛠️</span> Tech-Stack
+                  <span className="text-2xl">📦</span> Projekt-Typ
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {PROJECT_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleProjectTypeChange(type)}
+                      className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                        projectType === type
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
+                  <span className="text-2xl">🛠️</span> Tech-Stack für {projectType}
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {(Object.keys(TECH_OPTIONS) as (keyof typeof TECH_OPTIONS)[]).map((key) => (
+                  {Object.entries(currentTechOptions).map(([key, options]) => (
                     <div key={key}>
                       <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">
                         {key}
@@ -161,32 +444,11 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
                         className="w-full px-3 py-2 border-2 border-slate-200 rounded-xl text-sm focus:border-indigo-500 focus:outline-none bg-white"
                       >
                         <option value="">-- Auswählen --</option>
-                        {TECH_OPTIONS[key].map((opt) => (
+                        {options.map((opt) => (
                           <option key={opt} value={opt}>{opt}</option>
                         ))}
                       </select>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
-                  <span className="text-2xl">📦</span> Projekt-Typ
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {PROJECT_TYPES.map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => setProjectType(type)}
-                      className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                        projectType === type
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {type}
-                    </button>
                   ))}
                 </div>
               </div>
@@ -203,12 +465,20 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
           {/* Step: Features */}
           {step === 'features' && (
             <div className="space-y-6">
+              {hasExistingData && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-3 text-sm text-green-700">
+                  ✓ Gespeicherte Features geladen. Du kannst sie bearbeiten oder direkt die Spec generieren.
+                </div>
+              )}
+
               <div>
                 <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
                   <span className="text-2xl">🎯</span> Hauptfeatures
                 </h3>
                 <p className="text-slate-400 text-sm mb-4">
-                  Beschreibe 5-10 Hauptfeatures. Diese werden durch KI zu 40-60 detaillierten Features expandiert.
+                  {mainFeatures.filter(f => f.trim()).length >= 3
+                    ? `${mainFeatures.filter(f => f.trim()).length} Features definiert. Bearbeite sie oder generiere die Spec.`
+                    : 'Beschreibe 3-10 Hauptfeatures. Diese werden durch KI expandiert.'}
                 </p>
 
                 <div className="space-y-2">
@@ -270,7 +540,7 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
                   onClick={() => setStep('config')}
                   className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 transition-colors"
                 >
-                  ← Zurück
+                  ← Tech-Stack
                 </button>
                 <button
                   onClick={handleGenerate}
@@ -298,7 +568,6 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
           {/* Step: Preview */}
           {step === 'preview' && generatedSpec && (
             <div className="space-y-6">
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-indigo-50 rounded-2xl p-4 text-center">
                   <div className="text-3xl font-black text-indigo-600">{generatedSpec.stats.totalFeatures}</div>
@@ -314,22 +583,17 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
                 </div>
               </div>
 
-              {/* Category breakdown */}
               <div>
                 <h4 className="font-bold text-slate-900 mb-2 text-sm">Features nach Kategorie:</h4>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(generatedSpec.stats.byCategory).map(([cat, count]) => (
-                    <span
-                      key={cat}
-                      className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600"
-                    >
+                    <span key={cat} className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600">
                       {cat}: {count}
                     </span>
                   ))}
                 </div>
               </div>
 
-              {/* Preview */}
               <div>
                 <h4 className="font-bold text-slate-900 mb-2 text-sm">Spec Preview:</h4>
                 <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto max-h-64 overflow-y-auto">
@@ -338,7 +602,6 @@ export const HarnessExportModal: React.FC<HarnessExportModalProps> = ({ isOpen, 
                 </pre>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-3">
                 <button
                   onClick={handleDownload}

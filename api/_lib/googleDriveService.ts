@@ -87,7 +87,8 @@ export const saveToGoogleDrive = async (
     "differentiation", "risks", "next_action", "status", "priority",
     "tags", "source", "version",
     "image_url_1", "image_url_2", "image_url_3", "image_url_4", "image_url_5",
-    "audio_transcript"
+    "audio_transcript",
+    "harness_project_type", "harness_tech_stack", "harness_features"
   ];
 
   const values = headers.map(h => {

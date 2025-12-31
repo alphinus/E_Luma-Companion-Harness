@@ -71,6 +71,11 @@ export interface NormalizedIdea {
   image_url_4: string;
   image_url_5: string;
   audio_transcript: string; // New field for the CSV export
+
+  // Harness Export Persistence
+  harness_project_type?: string;   // z.B. "Mobile App", "SaaS", etc.
+  harness_tech_stack?: string;     // JSON-String mit Tech-Stack Auswahl
+  harness_features?: string;       // JSON-String mit Feature-Array
 }
 
 // Represents a saved idea loaded from Google Drive

@@ -151,3 +151,99 @@ export const expandHarnessFeatures = async (
         content: response.choices[0].message.content || '[]'
     };
 };
+
+// Harness KI-Voranalyse
+export interface HarnessAnalysis {
+    suggestedType: 'Mobile App' | 'SaaS' | 'Tool' | 'API' | 'CLI' | 'Library';
+    typeReason: string;
+    suggestedTechStack: Record<string, string>;
+    suggestedFeatures: string[];
+    inputQuality: 'strong' | 'medium' | 'weak';
+    questions?: string[];
+}
+
+export const analyzeIdeaForHarness = async (
+    idea: {
+        project_name: string;
+        problem_statement: string;
+        solution_summary: string;
+        target_user: string;
+        constraints?: string;
+        tags?: string;
+    }
+): Promise<HarnessAnalysis> => {
+    const openai = getOpenAIClient();
+
+    const prompt = `
+Analysiere diese App-Idee und gib Empfehlungen für die technische Umsetzung.
+
+PROJEKT: ${idea.project_name}
+PROBLEM: ${idea.problem_statement}
+LÖSUNG: ${idea.solution_summary}
+ZIELGRUPPE: ${idea.target_user}
+EINSCHRÄNKUNGEN: ${idea.constraints || 'Keine angegeben'}
+TAGS: ${idea.tags || 'Keine'}
+
+Analysiere und antworte im JSON-Format:
+{
+    "suggestedType": "Mobile App" | "SaaS" | "Tool" | "API" | "CLI" | "Library",
+    "typeReason": "Kurze Begründung warum dieser Typ (z.B. 'Bluetooth und Android erwähnt')",
+    "suggestedTechStack": {
+        // Für Mobile App:
+        "framework": "React Native" | "Flutter" | "Kotlin" | "Swift" | "Expo",
+        "backend": "Firebase" | "Supabase" | "AWS Amplify" | "Custom API" | "None",
+        "database": "Firestore" | "SQLite" | "Realm" | "None",
+        "auth": "Firebase Auth" | "Biometric" | "None"
+
+        // Für SaaS:
+        "backend": "Next.js API" | "Node.js + Express" | "FastAPI",
+        "database": "Supabase" | "PostgreSQL" | "MongoDB",
+        "frontend": "Next.js" | "React + Vite" | "Vue",
+        "auth": "Supabase Auth" | "Clerk" | "NextAuth",
+        "hosting": "Vercel" | "Railway" | "AWS"
+
+        // Passend zum suggestedType wählen!
+    },
+    "suggestedFeatures": [
+        "Feature 1 - kurze Beschreibung",
+        "Feature 2 - kurze Beschreibung",
+        "Feature 3 - kurze Beschreibung"
+    ],
+    "inputQuality": "strong" | "medium" | "weak",
+    "questions": ["Frage 1?", "Frage 2?"]  // NUR wenn inputQuality = "weak"
+}
+
+WICHTIG:
+- Bei "Mobile App": Niemals Supabase/Next.js empfehlen, sondern Firebase/React Native
+- Bei "SaaS": Web-Stack wie Next.js/Supabase
+- Bei schwachem Input (vage Beschreibung): inputQuality="weak" und Rückfragen stellen
+- Features sollten konkret und umsetzbar sein
+`;
+
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+            {
+                role: "system",
+                content: "Du bist ein erfahrener Software-Architekt. Analysiere App-Ideen und empfehle passende Tech-Stacks. Antworte NUR mit validem JSON."
+            },
+            {
+                role: "user",
+                content: prompt
+            }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.5
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+
+    return {
+        suggestedType: result.suggestedType || 'SaaS',
+        typeReason: result.typeReason || 'Standardempfehlung',
+        suggestedTechStack: result.suggestedTechStack || {},
+        suggestedFeatures: result.suggestedFeatures || [],
+        inputQuality: result.inputQuality || 'medium',
+        questions: result.questions
+    };
+};
