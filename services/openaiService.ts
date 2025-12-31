@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { IdeationData, PersonData, NormalizedIdea, VoiceExtraction } from "../types";
 
 const getOpenAIClient = () => {
-    return new OpenAI({ apiKey: "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" });
+    return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 };
 
 export const generateIdeaFromPerson = async (

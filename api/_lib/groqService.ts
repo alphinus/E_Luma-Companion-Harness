@@ -6,7 +6,7 @@ import { IdeationData, PersonData, VoiceExtraction } from "../../types";
 const getGroqClient = () => {
     console.log("[Groq] Initializing client...");
     return new OpenAI({
-        apiKey: "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",
+        apiKey: process.env.GROQ_API_KEY,
         baseURL: "https://api.groq.com/openai/v1",
     });
 };
