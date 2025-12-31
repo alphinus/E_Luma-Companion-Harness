@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { IdeationData, PersonData, NormalizedIdea, VoiceExtraction } from "../../types";
 
 const getOpenAIClient = () => {
-    return new OpenAI({ apiKey: "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" });
+    return new OpenAI({ apiKey: "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" });
 };
 
 export const generateIdeaFromPerson = async (
