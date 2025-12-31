@@ -104,5 +104,55 @@ export enum WizardStep {
   PERSON_CHALLENGES = 18,
   PERSON_SYNTHESIS = 19,
   MY_IDEAS = 20,
-  IDEA_EDIT = 21
+  IDEA_EDIT = 21,
+  HARNESS_EXPORT = 22
+}
+
+// Harness Export Types
+export interface TechStack {
+  backend: string;
+  database: string;
+  frontend: string;
+  auth: string;
+  hosting: string;
+  payments?: string;
+  email?: string;
+}
+
+export interface HarnessFeature {
+  id: string;
+  title: string;
+  category: 'config' | 'database' | 'service' | 'api' | 'ui' | 'integration' | 'security' | 'test' | 'worker' | 'infrastructure';
+  complexity: 'simple' | 'medium' | 'complex';
+  dependsOn: string[];
+  acceptanceCriteria: string[];
+}
+
+export interface HarnessExportInput {
+  // From existing idea
+  projectName: string;
+  problemStatement: string;
+  targetAudience: string;
+  solution: string;
+  constraints: string;
+  differentiation: string;
+  risks: string;
+  nextSteps: string;
+
+  // New inputs from modal
+  techStack: TechStack;
+  mainFeatures: string[];
+  projectType: 'SaaS' | 'Tool' | 'API' | 'Mobile App' | 'CLI' | 'Library';
+}
+
+export interface HarnessSpec {
+  markdown: string;
+  features: HarnessFeature[];
+  stats: {
+    totalFeatures: number;
+    byCategory: Record<string, number>;
+    byComplexity: Record<string, number>;
+    estimatedTurns: number;
+    estimatedCost: string;
+  };
 }

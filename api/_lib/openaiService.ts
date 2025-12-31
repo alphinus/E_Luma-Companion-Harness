@@ -97,9 +97,9 @@ export const processAudioIdeation = async (
 
     // 3. Extract structured data using GPT-4o-mini
     const prompt = `
-    Analysiere das folgende Audio-Transkript einer App-Idee oder eines Personenprofils. 
+    Analysiere das folgende Audio-Transkript einer App-Idee oder eines Personenprofils.
     Beachte den System-Kontext: ${userInstruction}
-    
+
     Extrahiere die folgenden Informationen im JSON-Format:
     - extracted_data: { projectName, problemStatement, solutionSummary } (falls App-Idee)
     - extracted_person: { name, expertise, passions, challenges } (falls Personenprofil)
@@ -121,5 +121,33 @@ export const processAudioIdeation = async (
         extracted_data: result.extracted_data,
         extracted_person: result.extracted_person,
         questions: result.questions || []
+    };
+};
+
+// Harness Spec Feature Expansion
+export const expandHarnessFeatures = async (
+    prompt: string,
+    projectName: string
+): Promise<{ content: string }> => {
+    const openai = getOpenAIClient();
+
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+            {
+                role: "system",
+                content: "Du bist ein erfahrener Software-Architekt. Generiere Feature-Listen im JSON-Array Format. Antworte nur mit dem JSON-Array, keine zusätzlichen Erklärungen."
+            },
+            {
+                role: "user",
+                content: prompt
+            }
+        ],
+        max_tokens: 8000,
+        temperature: 0.7
+    });
+
+    return {
+        content: response.choices[0].message.content || '[]'
     };
 };

@@ -1,7 +1,7 @@
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { normalizeIdeation as geminiNormalize, processAudioIdeation as geminiAudio, generateIdeaFromPerson as geminiGenerate } from './_lib/geminiService.js';
-import { normalizeIdeation as openaiNormalize, generateIdeaFromPerson as openaiGenerate, processAudioIdeation as openaiAudio } from './_lib/openaiService.js';
+import { normalizeIdeation as openaiNormalize, generateIdeaFromPerson as openaiGenerate, processAudioIdeation as openaiAudio, expandHarnessFeatures as openaiExpand } from './_lib/openaiService.js';
 import { processAudioIdeation as groqAudio, generateIdeaFromPerson as groqGenerate } from './_lib/groqService.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -12,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { action, data, userEmail, instruction, audioBase64, mimeType, personData } = req.body;
+    const { action, data, userEmail, instruction, audioBase64, mimeType, personData, prompt, projectName } = req.body;
 
     try {
         switch (action) {
@@ -81,6 +81,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                             });
                         }
                     }
+                }
+
+            case 'harnessExpand':
+                console.log(`[Proxy] harnessExpand called for project: ${projectName}`);
+                try {
+                    const result = await openaiExpand(prompt, projectName);
+                    console.log("[Proxy] OpenAI Harness Expand SUCCESS");
+                    return res.status(200).json({ ...result, _provider: 'openai' });
+                } catch (err: any) {
+                    console.error("[Proxy] OpenAI Harness Expand failed:", err.message);
+                    return res.status(500).json({
+                        error: `Harness-Expansion fehlgeschlagen: ${err.message}`,
+                        _provider: 'none'
+                    });
                 }
 
             default:
