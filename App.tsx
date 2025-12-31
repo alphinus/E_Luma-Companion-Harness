@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { UserProfile, IdeationData, WizardStep, NormalizedIdea, PromptPreset, VoiceExtraction, PersonData, SavedIdea } from './types';
 import { llmService, ProviderType } from './services/llmService';
 import { saveToGoogleDrive, uploadImageToDrive, downloadCsvLocally, listIdeationFilesForUser, getFileContent, updateFileInDrive, parseCSVToIdea } from './services/googleDriveService';
-import { HarnessExportModal } from './components/HarnessExportModal';
 
 
 
@@ -260,7 +259,6 @@ const App: React.FC = () => {
     wantsToChangeImages: boolean;
   } | null>(null);
   const [showImageChangeModal, setShowImageChangeModal] = useState(false);
-  const [showHarnessExport, setShowHarnessExport] = useState(false);
   const [pendingEditIdea, setPendingEditIdea] = useState<SavedIdea | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
@@ -1058,26 +1056,12 @@ const App: React.FC = () => {
                 <button onClick={() => { resetForNewIdeation(); setStep(WizardStep.DASHBOARD); }} className="flex-1 py-5 bg-slate-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest">Home</button>
               </div>
               <button
-                onClick={() => setShowHarnessExport(true)}
-                className="w-full py-5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest hover:from-purple-700 hover:to-indigo-700 transition-all"
-              >
-                🤖 Export to Harness
-              </button>
-              <button
                 onClick={() => { resetForNewIdeation(); setStep(WizardStep.CONTEXT); }}
                 className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition-colors"
               >
                 ✨ Neue Idee erfassen
               </button>
             </div>
-            {/* Harness Export Modal */}
-            {normalizedResult && (
-              <HarnessExportModal
-                isOpen={showHarnessExport}
-                onClose={() => setShowHarnessExport(false)}
-                idea={normalizedResult}
-              />
-            )}
           </div>
         );
 
