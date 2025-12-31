@@ -7,7 +7,7 @@ import { HarnessExportModal } from './components/HarnessExportModal';
 
 
 
-const GOOGLE_CLIENT_ID = "1089918924198-0nnc8nuradga903ifa0vbn3c2usuan4p.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "1089918924198-ousnc9gjqurdb67rf1gnv3r94033rims.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
 
 // Allowed users for this app
