@@ -2,7 +2,7 @@
 import { NormalizedIdea } from "../../types";
 
 // Target folder for all E_Luma Companion uploads
-const GOOGLE_DRIVE_FOLDER_ID = "1KvSOQbj6Ff5h7-Md9usct_mGayyP42Qx";
+const GOOGLE_DRIVE_FOLDER_ID = "1J8BjXBhuLkmSHrOXchYuLUCBPlgbVpIE";
 
 /**
  * Hilfsfunktion zur Behandlung von Google API-Antworten und Fehlern.

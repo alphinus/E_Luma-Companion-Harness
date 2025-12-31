@@ -3,13 +3,13 @@ import { NormalizedIdea } from "../types";
 
 // Hardcoded folder IDs for each user (pre-existing shared folders)
 const USER_FOLDER_IDS: Record<string, string> = {
-  'eluma0001@gmail.com': '1eBRPg4H2IbWb7tPgGdrat3XW-amGlWug',
-  'eluma0002@gmail.com': '1HRFd_oDZs1PFRyDFpwixR8fFqpObDHey',
+  'eluma0001@gmail.com': '10koBufrVkO4b7f0hKh4wFHyexhqNxrjR',
+  'eluma0002@gmail.com': '1NT51UxfKdZ4CEnzSmoKFHd4mmsSZYHNf',
 };
 
 
 // Default fallback folder
-const DEFAULT_FOLDER_ID = '1KvSOQbj6Ff5h7-Md9usct_mGayyP42Qx';
+const DEFAULT_FOLDER_ID = '1J8BjXBhuLkmSHrOXchYuLUCBPlgbVpIE';
 
 /**
  * Get the folder ID for a specific user.
